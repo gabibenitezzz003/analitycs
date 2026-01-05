@@ -1,29 +1,23 @@
-"use client"
-
 import { TrendChart } from "@/components/charts/trend-chart"
 import { DistributionChart, ChartLegend } from "@/components/charts/distribution-chart"
 import { HourlyChart } from "@/components/charts/hourly-chart"
+import { getMetricasDiarias, getDistribucionIntencion, getActividadPorHora, getMetricasHoy } from "@/lib/queries"
+import { format } from "date-fns"
+import { es } from "date-fns/locale"
 
-// Datos de ejemplo para tendencia semanal
-const mockTrendData = [
-  { fecha: "Lun", interacciones: 320, reservas: 45 },
-  { fecha: "Mar", interacciones: 450, reservas: 62 },
-  { fecha: "Mié", interacciones: 380, reservas: 51 },
-  { fecha: "Jue", interacciones: 520, reservas: 78 },
-  { fecha: "Vie", interacciones: 610, reservas: 89 },
-  { fecha: "Sáb", interacciones: 380, reservas: 42 },
-  { fecha: "Dom", interacciones: 187, reservas: 23 },
-]
+export async function ChartsSection() {
+  const [metricasData, distributionData] = await Promise.all([
+    getMetricasDiarias(),
+    getDistribucionIntencion()
+  ])
 
-// Datos para distribución por intención
-const distributionData = [
-  { name: "Consultar", value: 45.2, color: "#3b82f6" },
-  { name: "Reservar", value: 28.7, color: "#10b981" },
-  { name: "Rechazar", value: 16.4, color: "#ef4444" },
-  { name: "Contraoferta", value: 9.7, color: "#f59e0b" },
-]
+  // Format trend data for chart
+  const trendData = metricasData.map(m => ({
+    fecha: format(new Date(m.fecha), "eee", { locale: es }),
+    interacciones: m.total_mensajes,
+    reservas: m.total_reservas
+  }))
 
-export function ChartsSection() {
   return (
     <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
       {/* Tendencia Semanal */}
@@ -33,16 +27,20 @@ export function ChartsSection() {
             <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
               <polyline points="22 12 18 12 15 21 9 3 6 12 2 12" />
             </svg>
-            Tendencia Semanal
+            Tendencia Diaria
           </h3>
           <div className="flex items-center gap-4 text-xs">
             <div className="flex items-center gap-2">
               <span className="w-3 h-3 rounded-full bg-blue-500" />
               <span className="text-zinc-400">Interacciones</span>
             </div>
+            <div className="flex items-center gap-2">
+              <span className="w-3 h-3 rounded-full bg-emerald-500" />
+              <span className="text-zinc-400">Reservas</span>
+            </div>
           </div>
         </div>
-        <TrendChart data={mockTrendData} dataKey="interacciones" height={250} />
+        <TrendChart data={trendData} dataKey="interacciones" height={250} />
       </div>
 
       {/* Distribución por Intención */}
@@ -55,16 +53,34 @@ export function ChartsSection() {
           </svg>
           Distribución por Intención
         </h3>
-        <DistributionChart data={distributionData} height={180} />
-        <div className="mt-4">
-          <ChartLegend data={distributionData} />
-        </div>
+        {distributionData.length > 0 ? (
+          <>
+            <DistributionChart data={distributionData} height={180} />
+            <div className="mt-4">
+              <ChartLegend data={distributionData} />
+            </div>
+          </>
+        ) : (
+          <div className="h-[180px] flex items-center justify-center text-zinc-500 text-sm">
+            No hay datos hoy
+          </div>
+        )}
       </div>
     </div>
   )
 }
 
-export function ActivitySection() {
+export async function ActivitySection() {
+  const [hourlyData, metricasHoy] = await Promise.all([
+    getActividadPorHora(),
+    getMetricasHoy()
+  ])
+  
+  // Safe defaults
+  const tasaExito = metricasHoy?.tasa_exito_ia || 0 // Assuming view has this or we mock/calc
+  const tasaFallback = metricasHoy?.tasa_fallback || 0
+  const tiempoRespuesta = metricasHoy?.tiempo_respuesta_promedio_ms || 0
+
   return (
     <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
       {/* Actividad por Hora */}
@@ -74,9 +90,9 @@ export function ActivitySection() {
             <circle cx="12" cy="12" r="10" />
             <polyline points="12 6 12 12 16 14" />
           </svg>
-          Actividad por Hora
+          Actividad por Hora (Hoy)
         </h3>
-        <HourlyChart height={200} />
+        <HourlyChart data={hourlyData} height={200} />
       </div>
 
       {/* Métricas de IA */}
@@ -92,37 +108,37 @@ export function ActivitySection() {
         <div className="space-y-5">
           <div>
             <div className="flex justify-between items-center mb-2">
-              <span className="text-sm text-zinc-400">Tasa Éxito</span>
-              <span className="text-sm font-bold text-emerald-400">87.3%</span>
+              <span className="text-sm text-zinc-400">Tasa Éxito (Est.)</span>
+              <span className="text-sm font-bold text-emerald-400">{((1 - (tasaFallback/100)) * 100).toFixed(1)}%</span>
             </div>
             <div className="w-full bg-zinc-800 rounded-full h-2 overflow-hidden">
               <div 
                 className="bg-gradient-to-r from-emerald-500 to-emerald-400 h-2 rounded-full transition-all duration-1000" 
-                style={{ width: "87.3%" }} 
+                style={{ width: `${(1 - (tasaFallback/100)) * 100}%` }} 
               />
             </div>
           </div>
           <div>
             <div className="flex justify-between items-center mb-2">
               <span className="text-sm text-zinc-400">Tasa Fallback</span>
-              <span className="text-sm font-bold text-red-400">4.2%</span>
+              <span className="text-sm font-bold text-red-400">{Number(tasaFallback).toFixed(1)}%</span>
             </div>
             <div className="w-full bg-zinc-800 rounded-full h-2 overflow-hidden">
               <div 
                 className="bg-gradient-to-r from-red-500 to-red-400 h-2 rounded-full transition-all duration-1000" 
-                style={{ width: "21%" }} 
+                style={{ width: `${Math.min(tasaFallback * 5, 100)}%` }} 
               />
             </div>
           </div>
           <div>
             <div className="flex justify-between items-center mb-2">
               <span className="text-sm text-zinc-400">Tiempo Respuesta</span>
-              <span className="text-sm font-bold text-blue-400">1.25s</span>
+              <span className="text-sm font-bold text-blue-400">{tiempoRespuesta}ms</span>
             </div>
             <div className="w-full bg-zinc-800 rounded-full h-2 overflow-hidden">
               <div 
                 className="bg-gradient-to-r from-blue-500 to-cyan-400 h-2 rounded-full transition-all duration-1000" 
-                style={{ width: "65%" }} 
+                style={{ width: `${Math.min(tiempoRespuesta / 20, 100)}%` }} 
               />
             </div>
           </div>
