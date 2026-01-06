@@ -1,29 +1,30 @@
 import { Suspense } from "react"
-import { getMetricasHoy, getInteraccionesHoy, getSesionesActivas, getValorTotalHoy, getTopRutas } from "@/lib/queries"
+import { getMetricas, getInteracciones, getSesionesActivas, getValorTotal, getTopRutas } from "@/lib/queries"
 import { ChartsSection, ActivitySection } from "./charts-section"
 import { OfertasActivasTable } from "@/components/ofertas-activas-table"
 import { KPIsSection } from "./kpis-section"
 
-async function KPIsWrapper() {
-  const [interacciones, sesiones, metricasHoy, valorTotal] = await Promise.all([
-    getInteraccionesHoy(),
-    getSesionesActivas(),
-    getMetricasHoy(),
-    getValorTotalHoy(),
+async function KPIsWrapper({ range }: { range: string }) {
+  // Now fetching objects with { value, trend } or similar structure
+  const [interacciones, sesiones, metricas, valorTotal] = await Promise.all([
+    getInteracciones(range),
+    getSesionesActivas(range), 
+    getMetricas(range),
+    getValorTotal(range),
   ])
 
   return (
     <KPIsSection 
       initialInteracciones={interacciones}
       initialSesiones={sesiones}
-      initialMetricas={metricasHoy}
+      initialMetricas={metricas}
       initialValorTotal={valorTotal}
     />
   )
 }
 
-async function TopRutasSection() {
-  const rutas = await getTopRutas(5)
+async function TopRutasSection({ range }: { range: string }) {
+  const rutas = await getTopRutas(5, range)
 
   return (
     <div className="bg-[#0a0a0a] border border-white/[0.06] rounded-xl p-6 card-animate">
@@ -100,24 +101,24 @@ function LoadingSkeleton() {
   )
 }
 
-export async function ResumenContent() {
+export async function ResumenContent({ range = "7d" }: { range?: string }) {
   return (
     <div className="space-y-6">
       {/* KPIs */}
       <Suspense fallback={<LoadingSkeleton />}>
-        <KPIsWrapper />
+        <KPIsWrapper range={range} />
       </Suspense>
 
       {/* Gráficos */}
-      <ChartsSection />
+      <ChartsSection range={range} />
 
       {/* Actividad y Métricas */}
-      <ActivitySection />
+      <ActivitySection range={range} />
 
       {/* Bottom Row: Rutas + Ofertas */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
         <Suspense fallback={<LoadingSkeleton />}>
-          <TopRutasSection />
+          <TopRutasSection range={range} />
         </Suspense>
         
         <Suspense fallback={<LoadingSkeleton />}>

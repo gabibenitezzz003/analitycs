@@ -1,14 +1,14 @@
 import { TrendChart } from "@/components/charts/trend-chart"
 import { DistributionChart, ChartLegend } from "@/components/charts/distribution-chart"
 import { HourlyChart } from "@/components/charts/hourly-chart"
-import { getMetricasDiarias, getDistribucionIntencion, getActividadPorHora, getMetricasHoy } from "@/lib/queries"
+import { getMetricasDiarias, getDistribucionIntencion, getActividadPorHora, getMetricas } from "@/lib/queries"
 import { format } from "date-fns"
 import { es } from "date-fns/locale"
 
-export async function ChartsSection() {
+export async function ChartsSection({ range = "7d" }: { range?: string }) {
   const [metricasData, distributionData] = await Promise.all([
-    getMetricasDiarias(),
-    getDistribucionIntencion()
+    getMetricasDiarias(range),
+    getDistribucionIntencion(range)
   ])
 
   // Format trend data for chart
@@ -27,7 +27,7 @@ export async function ChartsSection() {
             <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
               <polyline points="22 12 18 12 15 21 9 3 6 12 2 12" />
             </svg>
-            Tendencia Diaria
+            Tendencia {range === 'today' ? 'Hoy' : 'Diaria'}
           </h3>
           <div className="flex items-center gap-4 text-xs">
             <div className="flex items-center gap-2">
@@ -62,7 +62,7 @@ export async function ChartsSection() {
           </>
         ) : (
           <div className="h-[180px] flex items-center justify-center text-zinc-500 text-sm">
-            No hay datos hoy
+            No hay datos para este periodo
           </div>
         )}
       </div>
@@ -70,16 +70,18 @@ export async function ChartsSection() {
   )
 }
 
-export async function ActivitySection() {
-  const [hourlyData, metricasHoy] = await Promise.all([
-    getActividadPorHora(),
-    getMetricasHoy()
+export async function ActivitySection({ range = "7d" }: { range?: string }) {
+  const [hourlyData, metricas] = await Promise.all([
+    getActividadPorHora(range),
+    getMetricas(range)
   ])
   
   // Safe defaults
-  const tasaExito = metricasHoy?.tasa_exito_ia || 0 // Assuming view has this or we mock/calc
-  const tasaFallback = metricasHoy?.tasa_fallback || 0
-  const tiempoRespuesta = metricasHoy?.tiempo_respuesta_promedio_ms || 0
+  const tasaFallback = metricas?.tasa_fallback || 0
+  const tasaExito = 100 - tasaFallback
+  
+  // Note: tiempo_respuesta isn't in aggregated metricas yet unless we add it, defaulting to 0 or mock
+  const tiempoRespuesta = 0 
 
   return (
     <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
@@ -90,7 +92,7 @@ export async function ActivitySection() {
             <circle cx="12" cy="12" r="10" />
             <polyline points="12 6 12 12 16 14" />
           </svg>
-          Actividad por Hora (Hoy)
+          Actividad por Hora {range === 'today' ? '(Hoy)' : ''}
         </h3>
         <HourlyChart data={hourlyData} height={200} />
       </div>

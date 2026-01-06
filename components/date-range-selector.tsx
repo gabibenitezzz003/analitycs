@@ -1,13 +1,11 @@
 "use client"
 
-import { useState } from "react"
+import { useRouter, useSearchParams } from "next/navigation"
 import { cn } from "@/lib/utils"
 
 export type DateRange = "today" | "7d" | "30d" | "90d" | "custom"
 
 interface DateRangeSelectorProps {
-  value: DateRange
-  onChange: (range: DateRange) => void
   className?: string
 }
 
@@ -18,16 +16,26 @@ const ranges: { id: DateRange; label: string }[] = [
   { id: "90d", label: "90 días" },
 ]
 
-export function DateRangeSelector({ value, onChange, className }: DateRangeSelectorProps) {
+export function DateRangeSelector({ className }: DateRangeSelectorProps) {
+  const router = useRouter()
+  const searchParams = useSearchParams()
+  const activeRange = searchParams.get("range") || "7d"
+
+  const handleRangeChange = (range: string) => {
+    const params = new URLSearchParams(searchParams.toString())
+    params.set("range", range)
+    router.push(`?${params.toString()}`)
+  }
+
   return (
     <div className={cn("flex items-center gap-1 bg-[#0a0a0a] border border-white/[0.06] rounded-lg p-1", className)}>
       {ranges.map((range) => (
         <button
           key={range.id}
-          onClick={() => onChange(range.id)}
+          onClick={() => handleRangeChange(range.id)}
           className={cn(
             "px-3 py-1.5 text-xs font-medium rounded-md transition-all duration-200",
-            value === range.id
+            activeRange === range.id
               ? "bg-blue-500/20 text-blue-400 border border-blue-500/30"
               : "text-zinc-500 hover:text-white hover:bg-white/5"
           )}

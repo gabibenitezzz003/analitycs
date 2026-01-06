@@ -1,11 +1,24 @@
-import { getMetricasHoy } from "@/lib/queries"
+import { getMetricas, getAnalisisSentimiento } from "@/lib/queries"
 
-export async function IAContent() {
-  const metricas = await getMetricasHoy()
+export async function IAContent({ range = "7d" }: { range?: string }) {
+  const [metricas, sentimiento] = await Promise.all([
+    getMetricas(range),
+    getAnalisisSentimiento(range)
+  ])
   
-  const tasaExito = metricas?.tasa_exito_ia || 82
-  const tasaFallback = metricas?.tasa_fallback || 4.2
-  const tiempoRespuesta = metricas?.tiempo_respuesta_promedio || 1.25
+  const tasaFallback = metricas.tasa_fallback || 0
+  const tasaExito = 100 - tasaFallback
+  const tiempoRespuesta = 1.25 // Still mocked as we don't have this column yet
+  
+  // Custom logic for health score components based on available data or reasonable proxies
+  // Comprension: inverse of fallback? Or just high if conversions are high? 
+  // Let's use (100 - fallback) as base
+  const comprension = Math.min(100, Math.max(0, 100 - tasaFallback)) 
+  const extraccion = 89 // Static for now
+  const coherencia = 91 // Static for now
+
+  // Overall health
+  const healthScore = Math.round((comprension + extraccion + coherencia) / 3)
 
   return (
     <div className="space-y-6">
@@ -36,7 +49,7 @@ export async function IAContent() {
               </svg>
             </div>
           </div>
-          <p className="text-4xl font-bold text-emerald-400 tabular-nums">{tasaExito}%</p>
+          <p className="text-4xl font-bold text-emerald-400 tabular-nums">{tasaExito.toFixed(1)}%</p>
           <div className="mt-4 w-full bg-zinc-800 rounded-full h-2 overflow-hidden">
             <div 
               className="bg-gradient-to-r from-emerald-500 to-emerald-400 h-2 rounded-full transition-all duration-1000" 
@@ -58,11 +71,11 @@ export async function IAContent() {
               </svg>
             </div>
           </div>
-          <p className="text-4xl font-bold text-red-400 tabular-nums">{tasaFallback}%</p>
+          <p className="text-4xl font-bold text-red-400 tabular-nums">{tasaFallback.toFixed(1)}%</p>
           <div className="mt-4 w-full bg-zinc-800 rounded-full h-2 overflow-hidden">
             <div 
               className="bg-gradient-to-r from-red-500 to-red-400 h-2 rounded-full transition-all duration-1000" 
-              style={{ width: `${tasaFallback * 5}%` }} 
+              style={{ width: `${Math.min(tasaFallback * 5, 100)}%` }} 
             />
           </div>
           <p className="text-xs text-zinc-500 mt-2">Derivados a humano</p>
@@ -110,7 +123,7 @@ export async function IAContent() {
                 fill="none" 
                 stroke="url(#gradient)" 
                 strokeWidth="3"
-                strokeDasharray={`${tasaExito}, 100`}
+                strokeDasharray={`${healthScore}, 100`}
                 strokeLinecap="round"
               />
               <defs>
@@ -121,7 +134,7 @@ export async function IAContent() {
               </defs>
             </svg>
             <div className="absolute inset-0 flex items-center justify-center">
-              <span className="text-3xl font-bold text-cyan-400">{tasaExito}%</span>
+              <span className="text-3xl font-bold text-cyan-400">{healthScore}%</span>
             </div>
           </div>
           
@@ -129,28 +142,28 @@ export async function IAContent() {
             <div>
               <div className="flex justify-between text-sm mb-1">
                 <span className="text-zinc-400">Comprensión de Intención</span>
-                <span className="text-emerald-400 font-semibold">94%</span>
+                <span className="text-emerald-400 font-semibold">{comprension.toFixed(0)}%</span>
               </div>
               <div className="w-full bg-zinc-800 rounded-full h-2">
-                <div className="bg-emerald-500 h-2 rounded-full" style={{ width: "94%" }} />
+                <div className="bg-emerald-500 h-2 rounded-full" style={{ width: `${comprension}%` }} />
               </div>
             </div>
             <div>
               <div className="flex justify-between text-sm mb-1">
                 <span className="text-zinc-400">Extracción de Datos</span>
-                <span className="text-blue-400 font-semibold">89%</span>
+                <span className="text-blue-400 font-semibold">{extraccion}%</span>
               </div>
               <div className="w-full bg-zinc-800 rounded-full h-2">
-                <div className="bg-blue-500 h-2 rounded-full" style={{ width: "89%" }} />
+                <div className="bg-blue-500 h-2 rounded-full" style={{ width: `${extraccion}%` }} />
               </div>
             </div>
             <div>
               <div className="flex justify-between text-sm mb-1">
                 <span className="text-zinc-400">Respuestas Coherentes</span>
-                <span className="text-purple-400 font-semibold">91%</span>
+                <span className="text-purple-400 font-semibold">{coherencia}%</span>
               </div>
               <div className="w-full bg-zinc-800 rounded-full h-2">
-                <div className="bg-purple-500 h-2 rounded-full" style={{ width: "91%" }} />
+                <div className="bg-purple-500 h-2 rounded-full" style={{ width: `${coherencia}%` }} />
               </div>
             </div>
           </div>
@@ -172,17 +185,17 @@ export async function IAContent() {
         <div className="grid grid-cols-3 gap-4">
           <div className="text-center p-4 bg-emerald-500/5 rounded-xl border border-emerald-500/10">
             <span className="text-4xl mb-2 block">😊</span>
-            <p className="text-2xl font-bold text-emerald-400">68.5%</p>
+            <p className="text-2xl font-bold text-emerald-400">{sentimiento.positivo.toFixed(1)}%</p>
             <p className="text-xs text-zinc-500 mt-1">Positivo</p>
           </div>
           <div className="text-center p-4 bg-zinc-700/20 rounded-xl border border-zinc-700/30">
             <span className="text-4xl mb-2 block">😐</span>
-            <p className="text-2xl font-bold text-zinc-400">24.3%</p>
+            <p className="text-2xl font-bold text-zinc-400">{sentimiento.neutro.toFixed(1)}%</p>
             <p className="text-xs text-zinc-500 mt-1">Neutro</p>
           </div>
           <div className="text-center p-4 bg-red-500/5 rounded-xl border border-red-500/10">
             <span className="text-4xl mb-2 block">😞</span>
-            <p className="text-2xl font-bold text-red-400">7.2%</p>
+            <p className="text-2xl font-bold text-red-400">{sentimiento.negativo.toFixed(1)}%</p>
             <p className="text-xs text-zinc-500 mt-1">Negativo</p>
           </div>
         </div>

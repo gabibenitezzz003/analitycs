@@ -17,12 +17,19 @@ function LoadingState({ text = "Cargando..." }: { text?: string }) {
   )
 }
 
-export default function DashboardPage() {
+export default function DashboardPage({
+  searchParams,
+}: {
+  searchParams: { [key: string]: string | string[] | undefined }
+}) {
+  const range = (searchParams.range as string) || "7d"
+
   return (
     <DashboardLayoutClient
+      range={range}
       resumenContent={
         <Suspense fallback={<LoadingState text="Cargando resumen..." />}>
-          <ResumenContent />
+          <ResumenContent range={range} />
         </Suspense>
       }
       conversionContent={
@@ -32,7 +39,7 @@ export default function DashboardPage() {
       }
       iaContent={
         <Suspense fallback={<LoadingState text="Cargando métricas de IA..." />}>
-          <IAContent />
+          <IAContent range={range} />
         </Suspense>
       }
       transportistasContent={

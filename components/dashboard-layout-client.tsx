@@ -31,9 +31,9 @@ export function DashboardLayoutClient({
   iaContent,
   transportistasContent,
   geoContent,
-}: DashboardLayoutClientProps) {
+  range = "7d" 
+}: DashboardLayoutClientProps & { range?: string }) {
   const [activeTab, setActiveTab] = useState("resumen")
-  const [dateRange, setDateRange] = useState<DateRange>("7d")
 
   return (
     <div className="min-h-screen bg-black">
@@ -57,7 +57,7 @@ export function DashboardLayoutClient({
 
             <div className="flex items-center gap-3 flex-wrap">
               {/* Date Range Selector */}
-              <DateRangeSelector value={dateRange} onChange={setDateRange} />
+              <DateRangeSelector />
               
               {/* Export Buttons */}
               <ExportButtons />

@@ -73,10 +73,10 @@ function BrainIcon() {
 }
 
 interface KPIsSectionProps {
-  initialInteracciones: number
-  initialSesiones: number
+  initialInteracciones: { value: number; trend: number }
+  initialSesiones: { value: number; trend: number }
   initialMetricas: any
-  initialValorTotal: number
+  initialValorTotal: { value: number; trend: number }
 }
 
 export function KPIsSection({ 
@@ -85,12 +85,15 @@ export function KPIsSection({
   initialMetricas, 
   initialValorTotal 
 }: KPIsSectionProps) {
-  const [interacciones, setInteracciones] = useState(initialInteracciones)
-  const [sesiones, setSesiones] = useState(initialSesiones)
-  const [reservas, setReservas] = useState(initialMetricas?.total_reservas || 0)
-  const [tasaConversion, setTasaConversion] = useState(initialMetricas?.tasa_conversion || 0)
-  const [valorTotal, setValorTotal] = useState(initialValorTotal)
+  const [interacciones, setInteracciones] = useState(initialInteracciones.value)
+  const [sesiones, setSesiones] = useState(initialSesiones.value)
+  const [reservas, setReservas] = useState(initialMetricas.total_reservas || 0)
+  const [tasaConversion, setTasaConversion] = useState(initialMetricas.tasa_conversion || 0)
+  const [valorTotal, setValorTotal] = useState(initialValorTotal.value)
   
+  // Trends are derived from initial load (realtime updates usually don't recalc trends instantly to avoid jumping UI)
+  const trends = initialMetricas.trends || {}
+
   const supabase = createClient()
 
   useEffect(() => {
@@ -113,7 +116,6 @@ export function KPIsSection({
         'postgres_changes',
         { event: 'UPDATE', schema: 'public', table: 'b41_metricas_diarias' },
         (payload: any) => {
-          // Si el update es para el día de hoy
           const today = new Date().toISOString().split("T")[0]
           if (payload.new.fecha === today) {
             setReservas(payload.new.total_reservas)
@@ -129,7 +131,9 @@ export function KPIsSection({
     }
   }, [supabase])
 
-  const healthScore = 98 // Valor fijo o calculado según lógica de negocio
+  // TODO: Implement real Health Score calculation based on fallback rate + latency + sentiment
+  // For now, let's infer it from fallback rate (inverse)
+  const healthScore = Math.max(0, Math.min(100, 100 - (initialMetricas.tasa_fallback || 0) * 2))
 
   return (
     <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-6 gap-4">
@@ -140,7 +144,7 @@ export function KPIsSection({
           icon={<MessageIcon />}
           glowColor="blue"
           valueColor="text-blue-400"
-          trend={{ value: 12.4, label: "vs semana anterior" }}
+          trend={{ value: initialInteracciones.trend, label: "vs periodo anterior" }}
         />
       </div>
 
@@ -150,7 +154,7 @@ export function KPIsSection({
           value={sesiones}
           icon={<TruckIcon />}
           valueColor="text-purple-400"
-          trend={{ value: 8.2, label: "vs semana anterior" }}
+          trend={{ value: initialSesiones.trend, label: "vs periodo anterior" }}
         />
       </div>
 
@@ -161,7 +165,7 @@ export function KPIsSection({
           icon={<CheckIcon />}
           glowColor="green"
           valueColor="text-emerald-400"
-          trend={{ value: 15.7, label: "vs semana anterior" }}
+          trend={{ value: trends.total_reservas || 0, label: "vs periodo anterior" }}
         />
       </div>
 
@@ -172,7 +176,7 @@ export function KPIsSection({
           icon={<TargetIcon />}
           glowColor="amber"
           valueColor="text-amber-400"
-          trend={{ value: 2.3, label: "vs semana anterior" }}
+          trend={{ value: trends.tasa_conversion || 0, label: "vs periodo anterior" }}
         />
       </div>
 
@@ -183,18 +187,18 @@ export function KPIsSection({
           icon={<DollarIcon />}
           glowColor="green"
           valueColor="text-emerald-400"
-          trend={{ value: 18.9, label: "vs semana anterior" }}
+          trend={{ value: initialValorTotal.trend, label: "vs periodo anterior" }}
         />
       </div>
 
       <div className="card-animate stagger-6">
         <KPICard
           title="Health Score IA"
-          value={`${healthScore}%`}
+          value={`${healthScore.toFixed(0)}%`}
           icon={<BrainIcon />}
           glowColor="blue"
           valueColor="text-cyan-400"
-          trend={{ value: 5.1, label: "vs semana anterior" }}
+          trend={{ value: trends.tasa_fallback ? -trends.tasa_fallback : 0, label: "vs periodo anterior" }} // Invert fallback trend for health
         />
       </div>
     </div>

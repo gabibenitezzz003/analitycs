@@ -1,0 +1,440 @@
+{
+  "name": "WF-B41-ANALYTICS",
+  "nodes": [
+    {
+      "parameters": {
+        "workflowInputs": {
+          "values": [
+            {
+              "name": "telefono"
+            },
+            {
+              "name": "idCarga"
+            },
+            {
+              "name": "nroCarga"
+            },
+            {
+              "name": "mensajeUsuario"
+            },
+            {
+              "name": "respuestaIA"
+            },
+            {
+              "name": "accion"
+            },
+            {
+              "name": "datosCarga",
+              "type": "object"
+            },
+            {
+              "name": "tieneContexto",
+              "type": "boolean"
+            },
+            {
+              "name": "idioma"
+            },
+            {
+              "name": "phoneNumberId"
+            },
+            {
+              "name": "tiempoInicio"
+            }
+          ]
+        }
+      },
+      "type": "n8n-nodes-base.executeWorkflowTrigger",
+      "typeVersion": 1.1,
+      "position": [
+        -880,
+        112
+      ],
+      "id": "60d962c7-88eb-4b68-ae5b-1dec6d8ae52f",
+      "name": "Trigger - Recibir Evento B4.1"
+    },
+    {
+      "parameters": {
+        "jsCode": "const input = $input.first().json;\nconst now = new Date();\n\n// Calcular tiempo de respuesta\nlet tiempoRespuestaMs = null;\nif (input.tiempoInicio) {\n  tiempoRespuestaMs = now.getTime() - new Date(input.tiempoInicio).getTime();\n}\n\n// Extraer datos de carga\nconst carga = input.datosCarga || {};\nconst iaDatos = carga.IA_DATOS_CLAVE || {};\n\n// Determinar origen y destino\nconst origen = iaDatos.ORIGEN_TEXTO || carga.origenNombre || carga.origen || null;\nconst destino = iaDatos.DESTINO_TEXTO || carga.destinoNombre || carga.destino || null;\n\n// Extraer provincias (si vienen en formato \"Ciudad, Provincia, País\")\nlet origenProvincia = null;\nlet destinoProvincia = null;\nif (origen && origen.includes(',')) {\n  const parts = origen.split(',');\n  origenProvincia = parts[1]?.trim() || null;\n}\nif (destino && destino.includes(',')) {\n  const parts = destino.split(',');\n  destinoProvincia = parts[1]?.trim() || null;\n}\n\n// Determinar flags de resultado\nconst accion = (input.accion || '').toUpperCase();\nconst esReserva = accion === 'RESERVAR';\nconst esRechazo = accion === 'RECHAZAR';\nconst esExito = esReserva || accion === 'CONTRAOFERTAR';\nconst esConsulta = accion === 'CONSULTAR' || accion === 'INFO';\n\n// Detectar sentimiento básico\nconst mensaje = (input.mensajeUsuario || '').toLowerCase();\nlet sentimiento = 'NEUTRO';\nif (mensaje.match(/gracias|excelente|perfecto|genial|bueno/)) {\n  sentimiento = 'POSITIVO';\n} else if (mensaje.match(/no |malo|caro|problema|error/)) {\n  sentimiento = 'NEGATIVO';\n}\n\n// Generar session_id (teléfono + fecha)\nconst sessionId = `${input.telefono}_${now.toISOString().split('T')[0]}`;\n\n// Construir objeto para Supabase\nreturn [{\n  json: {\n    // Identificadores\n    telefono: input.telefono || null,\n    id_carga: input.idCarga || null,\n    nro_carga: input.nroCarga || iaDatos.NRO_CARGA_CORTO || null,\n    session_id: sessionId,\n    \n    // Conversación\n    mensaje_usuario: input.mensajeUsuario || null,\n    respuesta_ia: input.respuestaIA || null,\n    intencion: accion,\n    accion: accion,\n    \n    // Tiempos\n    tiempo_respuesta_ms: tiempoRespuestaMs,\n    hora_local: now.getHours(),\n    dia_semana: now.getDay(),\n    \n    // Negocio\n    valor_oferta: parseFloat(iaDatos.TARIFA) || parseFloat(carga.monto) || null,\n    moneda: iaDatos.MONEDA || carga.moneda || 'ARS',\n    \n    // Ruta\n    origen: origen,\n    origen_provincia: origenProvincia,\n    destino: destino,\n    destino_provincia: destinoProvincia,\n    distancia_km: parseFloat(iaDatos.DISTANCIA_KM) || parseFloat(carga.distancia) || null,\n    tipo_carga: iaDatos.MODALIDAD || carga.tipoViaje || 'FTL',\n    peso_tn: parseFloat(iaDatos.PESO) || parseFloat(carga.peso) || null,\n    \n    // Calidad\n    fue_fallback: false,\n    tiene_contexto: input.tieneContexto || false,\n    sentimiento: sentimiento,\n    \n    // Resultado\n    es_exito: esExito,\n    es_consulta: esConsulta,\n    es_reserva: esReserva,\n    es_rechazo: esRechazo,\n    \n    // Metadata\n    idioma: input.idioma || 'ES',\n    phone_number_id: input.phoneNumberId || null,\n    version_workflow: 'V14'\n  }\n}];"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        -656,
+        112
+      ],
+      "id": "f40a5f6d-bf68-4d40-ab25-5b7552a4a786",
+      "name": "Code - Transformar Métricas"
+    },
+    {
+      "parameters": {
+        "tableId": "b41_interacciones",
+        "fieldsUi": {
+          "fieldValues": [
+            {
+              "fieldId": "telefono",
+              "fieldValue": "={{ $json.telefono }}"
+            },
+            {
+              "fieldId": "id_carga",
+              "fieldValue": "={{ $json.id_carga }}"
+            },
+            {
+              "fieldId": "nro_carga",
+              "fieldValue": "={{ $json.nro_carga }}"
+            },
+            {
+              "fieldId": "session_id",
+              "fieldValue": "={{ $json.session_id }}"
+            },
+            {
+              "fieldId": "mensaje_usuario",
+              "fieldValue": "={{ $json.mensaje_usuario }}"
+            },
+            {
+              "fieldId": "respuesta_ia",
+              "fieldValue": "={{ $json.respuesta_ia }}"
+            },
+            {
+              "fieldId": "intencion",
+              "fieldValue": "={{ $json.intencion }}"
+            },
+            {
+              "fieldId": "accion",
+              "fieldValue": "={{ $json.accion }}"
+            },
+            {
+              "fieldId": "tiempo_respuesta_ms",
+              "fieldValue": "={{ $json.tiempo_respuesta_ms }}"
+            },
+            {
+              "fieldId": "hora_local",
+              "fieldValue": "={{ $json.hora_local }}"
+            },
+            {
+              "fieldId": "dia_semana",
+              "fieldValue": "={{ $json.dia_semana }}"
+            },
+            {
+              "fieldId": "valor_oferta",
+              "fieldValue": "={{ $json.valor_oferta }}"
+            },
+            {
+              "fieldId": "moneda",
+              "fieldValue": "={{ $json.moneda }}"
+            },
+            {
+              "fieldId": "origen",
+              "fieldValue": "={{ $json.origen }}"
+            },
+            {
+              "fieldId": "origen_provincia",
+              "fieldValue": "={{ $json.origen_provincia }}"
+            },
+            {
+              "fieldId": "destino",
+              "fieldValue": "={{ $json.destino }}"
+            },
+            {
+              "fieldId": "destino_provincia",
+              "fieldValue": "={{ $json.destino_provincia }}"
+            },
+            {
+              "fieldId": "distancia_km",
+              "fieldValue": "={{ $json.distancia_km }}"
+            },
+            {
+              "fieldId": "tipo_carga",
+              "fieldValue": "={{ $json.tipo_carga }}"
+            },
+            {
+              "fieldId": "peso_tn",
+              "fieldValue": "={{ $json.peso_tn }}"
+            },
+            {
+              "fieldId": "fue_fallback",
+              "fieldValue": "={{ $json.fue_fallback }}"
+            },
+            {
+              "fieldId": "tiene_contexto",
+              "fieldValue": "={{ $json.tiene_contexto }}"
+            },
+            {
+              "fieldId": "sentimiento",
+              "fieldValue": "={{ $json.sentimiento }}"
+            },
+            {
+              "fieldId": "es_exito",
+              "fieldValue": "={{ $json.es_exito }}"
+            },
+            {
+              "fieldId": "es_consulta",
+              "fieldValue": "={{ $json.es_consulta }}"
+            },
+            {
+              "fieldId": "es_reserva",
+              "fieldValue": "={{ $json.es_reserva }}"
+            },
+            {
+              "fieldId": "es_rechazo",
+              "fieldValue": "={{ $json.es_rechazo }}"
+            },
+            {
+              "fieldId": "idioma",
+              "fieldValue": "={{ $json.idioma }}"
+            },
+            {
+              "fieldId": "phone_number_id",
+              "fieldValue": "={{ $json.phone_number_id }}"
+            },
+            {
+              "fieldId": "version_workflow",
+              "fieldValue": "={{ $json.version_workflow }}"
+            }
+          ]
+        }
+      },
+      "type": "n8n-nodes-base.supabase",
+      "typeVersion": 1,
+      "position": [
+        -448,
+        112
+      ],
+      "id": "91ead27f-a25e-406d-a1e1-0fbf8544ea22",
+      "name": "Supabase - Guardar Interacción",
+      "credentials": {
+        "supabaseApi": {
+          "id": "cSgZC29aadDvNaPO",
+          "name": "Supabase Analytics"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 1
+          },
+          "conditions": [
+            {
+              "leftValue": "={{ $('Code - Transformar Métricas').item.json.es_reserva }}",
+              "rightValue": true,
+              "operator": {
+                "type": "boolean",
+                "operation": "equals"
+              },
+              "id": "9c30b3c6-1aa6-479f-9c98-f946fda1a53e"
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2,
+      "position": [
+        -224,
+        112
+      ],
+      "id": "abb56fdc-972e-4c5e-b9dd-caca35074397",
+      "name": "IF - Es Reserva?"
+    },
+    {
+      "parameters": {
+        "jsCode": "const data = $('Code - Transformar Métricas').first().json;\n\nreturn [{\n  json: {\n    telefono: data.telefono,\n    id_carga: data.id_carga,\n    nro_carga: data.nro_carga,\n    origen: data.origen,\n    destino: data.destino,\n    valor_original: data.valor_oferta,\n    moneda: data.moneda,\n    tipo_carga: data.tipo_carga,\n    estado: 'RESERVADA',\n    accion_final: 'RESERVAR',\n    valor_final: data.valor_oferta\n  }\n}];"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        0,
+        0
+      ],
+      "id": "a6eb8ad4-fb22-448b-8864-a27b0d9526b5",
+      "name": "Code - Preparar Oferta"
+    },
+    {
+      "parameters": {
+        "tableId": "b41_ofertas",
+        "fieldsUi": {
+          "fieldValues": [
+            {
+              "fieldId": "id_carga",
+              "fieldValue": "={{ $json.id_carga }}"
+            },
+            {
+              "fieldId": "nro_carga",
+              "fieldValue": "={{ $json.nro_carga }}"
+            },
+            {
+              "fieldId": "telefono_destino",
+              "fieldValue": "={{ $json.telefono }}"
+            },
+            {
+              "fieldId": "origen",
+              "fieldValue": "={{ $json.origen }}"
+            },
+            {
+              "fieldId": "destino",
+              "fieldValue": "={{ $json.destino }}"
+            },
+            {
+              "fieldId": "valor_original",
+              "fieldValue": "={{ $json.valor_original }}"
+            },
+            {
+              "fieldId": "moneda",
+              "fieldValue": "={{ $json.moneda }}"
+            },
+            {
+              "fieldId": "tipo_carga",
+              "fieldValue": "={{ $json.tipo_carga }}"
+            },
+            {
+              "fieldId": "estado",
+              "fieldValue": "={{ $json.estado }}"
+            },
+            {
+              "fieldId": "accion_final",
+              "fieldValue": "={{ $json.accion_final }}"
+            },
+            {
+              "fieldId": "valor_final",
+              "fieldValue": "={{ $json.valor_final }}"
+            }
+          ]
+        }
+      },
+      "type": "n8n-nodes-base.supabase",
+      "typeVersion": 1,
+      "position": [
+        224,
+        0
+      ],
+      "id": "7c6d3e00-3116-4f7a-8d03-dbf39d3868ca",
+      "name": "Supabase - Guardar Oferta",
+      "credentials": {
+        "supabaseApi": {
+          "id": "cSgZC29aadDvNaPO",
+          "name": "Supabase Analytics"
+        }
+      }
+    },
+    {
+      "parameters": {},
+      "type": "n8n-nodes-base.noOp",
+      "typeVersion": 1,
+      "position": [
+        0,
+        240
+      ],
+      "id": "9f4afcca-d73d-4e8a-a253-41ff65624dd4",
+      "name": "No Operation"
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://script.google.com/macros/s/AKfycbynqrpAbVtzAAG1iIQbUP1Pi5oqzjzvVykIto_yWDecvzrszuYQDuoiDcI7j8X4bYdTHg/exec",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify($json) }}",
+        "options": {
+          "redirect": {
+            "redirect": {}
+          },
+          "timeout": 10000
+        }
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        -624,
+        368
+      ],
+      "id": "da0acb8e-ec78-4739-921e-e09cb8f8c08c",
+      "name": "HTTP - Enviar a Google Sheets"
+    }
+  ],
+  "pinData": {},
+  "connections": {
+    "Trigger - Recibir Evento B4.1": {
+      "main": [
+        [
+          {
+            "node": "Code - Transformar Métricas",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Code - Transformar Métricas": {
+      "main": [
+        [
+          {
+            "node": "Supabase - Guardar Interacción",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "HTTP - Enviar a Google Sheets",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Supabase - Guardar Interacción": {
+      "main": [
+        [
+          {
+            "node": "IF - Es Reserva?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "IF - Es Reserva?": {
+      "main": [
+        [
+          {
+            "node": "Code - Preparar Oferta",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "No Operation",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Code - Preparar Oferta": {
+      "main": [
+        [
+          {
+            "node": "Supabase - Guardar Oferta",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": false,
+  "settings": {
+    "executionOrder": "v1"
+  },
+  "versionId": "8795ae48-7db1-4518-834a-b46851308166",
+  "meta": {
+    "templateCredsSetupCompleted": true,
+    "instanceId": "056e55fc9af2abd75cc7ad9fd6d21940852d41975ce0df2edfc054ca3990cdcb"
+  },
+  "id": "GW6SIG5zfbkn0W5e",
+  "tags": []
+}
