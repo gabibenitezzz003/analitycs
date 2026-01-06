@@ -1,5 +1,4 @@
-import { TrendChart } from "@/components/charts/trend-chart"
-import { DistributionChart, ChartLegend } from "@/components/charts/distribution-chart"
+import { ChartsInteractive } from "./charts-interactive"
 import { HourlyChart } from "@/components/charts/hourly-chart"
 import { getMetricasDiarias, getDistribucionIntencion, getActividadPorHora, getMetricas } from "@/lib/queries"
 import { format } from "date-fns"
@@ -14,59 +13,17 @@ export async function ChartsSection({ range = "7d" }: { range?: string }) {
   // Format trend data for chart
   const trendData = metricasData.map(m => ({
     fecha: format(new Date(m.fecha), "eee", { locale: es }),
+    fullDate: m.fecha,
     interacciones: m.total_mensajes,
     reservas: m.total_reservas
   }))
 
   return (
-    <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-      {/* Tendencia Semanal */}
-      <div className="lg:col-span-2 bg-[#0a0a0a] border border-white/[0.06] rounded-xl p-6 card-animate stagger-1">
-        <div className="flex items-center justify-between mb-6">
-          <h3 className="text-sm font-semibold text-white flex items-center gap-2">
-            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-              <polyline points="22 12 18 12 15 21 9 3 6 12 2 12" />
-            </svg>
-            Tendencia {range === 'today' ? 'Hoy' : 'Diaria'}
-          </h3>
-          <div className="flex items-center gap-4 text-xs">
-            <div className="flex items-center gap-2">
-              <span className="w-3 h-3 rounded-full bg-blue-500" />
-              <span className="text-zinc-400">Interacciones</span>
-            </div>
-            <div className="flex items-center gap-2">
-              <span className="w-3 h-3 rounded-full bg-emerald-500" />
-              <span className="text-zinc-400">Reservas</span>
-            </div>
-          </div>
-        </div>
-        <TrendChart data={trendData} dataKey="interacciones" height={250} />
-      </div>
-
-      {/* Distribución por Intención */}
-      <div className="bg-[#0a0a0a] border border-white/[0.06] rounded-xl p-6 card-animate stagger-2">
-        <h3 className="text-sm font-semibold text-white mb-6 flex items-center gap-2">
-          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-            <circle cx="12" cy="12" r="10" />
-            <circle cx="12" cy="12" r="6" />
-            <circle cx="12" cy="12" r="2" />
-          </svg>
-          Distribución por Intención
-        </h3>
-        {distributionData.length > 0 ? (
-          <>
-            <DistributionChart data={distributionData} height={180} />
-            <div className="mt-4">
-              <ChartLegend data={distributionData} />
-            </div>
-          </>
-        ) : (
-          <div className="h-[180px] flex items-center justify-center text-zinc-500 text-sm">
-            No hay datos para este periodo
-          </div>
-        )}
-      </div>
-    </div>
+    <ChartsInteractive 
+        trendData={trendData} 
+        distributionData={distributionData} 
+        range={range} 
+    />
   )
 }
 

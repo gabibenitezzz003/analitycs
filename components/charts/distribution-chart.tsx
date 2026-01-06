@@ -11,6 +11,7 @@ interface DistributionChartProps {
   height?: number
   innerRadius?: number
   outerRadius?: number
+  onValueClick?: (item: any) => void
 }
 
 const CustomTooltip = ({ active, payload }: any) => {
@@ -32,6 +33,7 @@ export function DistributionChart({
   height = 200,
   innerRadius = 50,
   outerRadius = 80,
+  onValueClick,
 }: DistributionChartProps) {
   if (!data || data.length === 0) {
     return (
@@ -56,6 +58,12 @@ export function DistributionChart({
           paddingAngle={2}
           dataKey="value"
           strokeWidth={0}
+          onClick={(data) => {
+             if (onValueClick && data && data.name) {
+                onValueClick(data) 
+             }
+          }}
+          className={onValueClick ? "cursor-pointer" : ""}
         >
           {data.map((entry, index) => (
             <Cell key={`cell-${index}`} fill={entry.color} />

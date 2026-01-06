@@ -5,6 +5,7 @@ import { DashboardTabs } from "./dashboard-tabs"
 import { LastUpdated } from "./last-updated"
 import { DateRangeSelector, type DateRange } from "./date-range-selector"
 import { ExportButtons } from "./export-buttons"
+import { DrillDownSheet } from "@/components/drill-down-sheet"
 
 function TruckIcon({ color = "#ffffff" }: { color?: string }) {
   return (
@@ -37,6 +38,7 @@ export function DashboardLayoutClient({
 
   return (
     <div className="min-h-screen bg-black">
+      <DrillDownSheet />
       <div className="max-w-[1920px] mx-auto p-6 lg:p-8">
         {/* Header */}
         <header className="mb-8">

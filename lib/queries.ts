@@ -423,3 +423,29 @@ export async function getActividadPorHora(range: string = "7d") {
     return Array.from({ length: 24 }, (_, i) => ({ hora: `${i}:00`, mensajes: 0 }))
   }
 }
+
+export async function getDrillDownDetails(type: 'date' | 'intention', value: string) {
+  try {
+    const supabase = await createClient()
+    let query = supabase
+      .from("v_dashboard_interacciones")
+      .select("*")
+      .order("created_at", { ascending: false })
+      .limit(50) 
+
+    if (type === 'date') {
+       const start = `${value}T00:00:00`
+       const end = `${value}T23:59:59`
+       query = query.gte("created_at", start).lte("created_at", end)
+    } else if (type === 'intention') {
+       query = query.ilike("intencion", value)
+    }
+
+    const { data, error } = await query
+    if (error) throw error
+    return data || []
+  } catch (error) {
+    console.error("Error in getDrillDownDetails:", error)
+    return []
+  }
+}

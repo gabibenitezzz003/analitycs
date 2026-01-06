@@ -23,6 +23,7 @@ interface TrendChartProps {
   color?: string
   height?: number
   showArea?: boolean
+  onValueClick?: (data: any) => void
 }
 
 const CustomTooltip = ({ active, payload, label }: any) => {
@@ -45,6 +46,7 @@ export function TrendChart({
   color = "#3b82f6",
   height = 200,
   showArea = true,
+  onValueClick,
 }: TrendChartProps) {
   if (!data || data.length === 0) {
     return (
@@ -61,7 +63,16 @@ export function TrendChart({
 
   return (
     <ResponsiveContainer width="100%" height={height}>
-      <AreaChart data={data} margin={{ top: 5, right: 5, left: 0, bottom: 5 }}>
+      <AreaChart 
+        data={data} 
+        margin={{ top: 5, right: 5, left: 0, bottom: 5 }}
+        onClick={(data) => {
+            if (onValueClick && data && data.activePayload && data.activePayload[0]) {
+                onValueClick(data.activePayload[0].payload)
+            }
+        }}
+        className={onValueClick ? "cursor-pointer" : ""}
+      >
         <defs>
           <linearGradient id={gradientId} x1="0" y1="0" x2="0" y2="1">
             <stop offset="0%" stopColor={color} stopOpacity={0.3} />

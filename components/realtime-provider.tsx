@@ -1,7 +1,6 @@
 "use client"
 
 import type React from "react"
-
 import { useEffect } from "react"
 import { createClient } from "@/lib/supabase/client"
 import { useRouter } from "next/navigation"
@@ -11,18 +10,23 @@ export function RealtimeProvider({ children }: { children: React.ReactNode }) {
   const supabase = createClient()
 
   useEffect(() => {
+    // Canal único optimizado
     const channel = supabase
-      .channel("dashboard-updates")
+      .channel("dashboard-updates-v2")
       .on("postgres_changes", { event: "INSERT", schema: "public", table: "b41_interacciones" }, () => {
-        console.log("[v0] New interaction detected, refreshing...")
+        console.log("⚡ Realtime: New interaction detected")
         router.refresh()
       })
       .on("postgres_changes", { event: "*", schema: "public", table: "b41_ofertas" }, () => {
-        console.log("[v0] Offer updated, refreshing...")
+        console.log("⚡ Realtime: Offer updated")
         router.refresh()
       })
       .on("postgres_changes", { event: "*", schema: "public", table: "b41_metricas_diarias" }, () => {
-        console.log("[v0] Daily metrics updated, refreshing...")
+        console.log("⚡ Realtime: Daily metrics updated")
+        router.refresh()
+      })
+      .on("postgres_changes", { event: "*", schema: "public", table: "b41_sesiones" }, () => {
+        console.log("⚡ Realtime: Session status updated")
         router.refresh()
       })
       .subscribe()
