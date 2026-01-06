@@ -1,4 +1,5 @@
--- SCRIPT DE MOCK DATA "ULTIMATE" (Versión Definitiva)
+-- SCRIPT DE MOCK DATA "ULTIMATE" (Versión Definitiva v2)
+-- Corrección: Eliminada columna 'session_id' de tabla ofertas.
 -- Genera datos en TODAS las tablas necesarias para que el dashboard brille.
 
 DO $$
@@ -117,11 +118,12 @@ BEGIN
             );
 
             -- CRÍTICO: Si es Reserva o Negociación, crear OFERTA para que el gráfico de Valor ($) funcione
+            -- FIX: Eliminado session_id que no existe en tabla b41_ofertas
             IF v_estado_oferta IS NOT NULL THEN
                 INSERT INTO public.b41_ofertas (
-                    telefono_destino, valor_final, estado, created_at, session_id
+                    telefono_destino, valor_final, estado, created_at
                 ) VALUES (
-                    v_t_id, v_valor, v_estado_oferta, v_fecha, v_s_id
+                    v_t_id, v_valor, v_estado_oferta, v_fecha
                 );
             END IF;
 
@@ -140,7 +142,7 @@ BEGIN
         COUNT(DISTINCT session_id) as ses,
         COUNT(*) FILTER (WHERE intencion = 'conversacion') as convs,
         COUNT(DISTINCT telefono) as usrs,
-        0, -- El valor total se calcula diferente (desde ofertas), pero ponemos 0 por ahora o sumamos si tuviéramos columna
+        0, -- El valor total se calcula desde ofertas
         COUNT(*) FILTER (WHERE intencion = 'cotizar' OR intencion = 'consultar'),
         COUNT(*) FILTER (WHERE intencion = 'reservar'),
         NOW()
@@ -162,5 +164,5 @@ BEGIN
     ) sub
     WHERE m.fecha = sub.dia;
 
-    RAISE NOTICE 'Generación masiva completada exitosamente.';
+    RAISE NOTICE 'Generación masiva completada exitosamente. V2.';
 END $$;

@@ -1,24 +1,37 @@
 import { getMetricas, getAnalisisSentimiento, getIAMetrics, getAdvancedIAMetrics, getFallbacks } from "@/lib/queries"
 
 export async function IAContent({ range = "7d" }: { range?: string }) {
-  const [metricas, sentimiento, iaMetrics, advancedAI, fallbacks] = await Promise.all([
-    getMetricas(range),
-    getAnalisisSentimiento(range),
-    getIAMetrics(range),
-    getAdvancedIAMetrics(range),
-    getFallbacks()
-  ])
+  // Manejo robusto de errores para evitar crashes en producción
+  let metricas, sentimiento, iaMetrics, advancedAI, fallbacks
   
-  const tasaFallback = metricas.tasa_fallback || 0
+  try {
+    [metricas, sentimiento, iaMetrics, advancedAI, fallbacks] = await Promise.all([
+      getMetricas(range).catch(() => ({ total_mensajes: 0, tasa_fallback: 0 })),
+      getAnalisisSentimiento(range).catch(() => ({ positivo: 0, neutro: 0, negativo: 0, count: 0 })),
+      getIAMetrics(range).catch(() => ({ tiempo_respuesta: 0, extraccion: 0, coherencia: 0 })),
+      getAdvancedIAMetrics(range).catch(() => ({ friccion: 0, total_tokens: 0 })),
+      getFallbacks().catch(() => [])
+    ])
+  } catch (error) {
+    console.error("Error fatal en IAContent:", error)
+    // Valores por defecto seguros
+    metricas = { total_mensajes: 0, tasa_fallback: 0 }
+    sentimiento = { positivo: 0, neutro: 0, negativo: 0, count: 0 }
+    iaMetrics = { tiempo_respuesta: 0, extraccion: 0, coherencia: 0 }
+    advancedAI = { friccion: 0, total_tokens: 0 }
+    fallbacks = []
+  }
+  
+  const tasaFallback = metricas?.tasa_fallback || 0
   const tasaExito = 100 - tasaFallback
-  const { tiempo_respuesta, extraccion, coherencia } = iaMetrics
+  const { tiempo_respuesta = 0, extraccion = 0, coherencia = 0 } = iaMetrics || {}
   
   // Si no hay mensajes, la comprensión es 0 (no hay datos), no 100.
-  const hasData = metricas.total_mensajes > 0
+  const hasData = (metricas?.total_mensajes || 0) > 0
   const comprension = hasData ? Math.min(100, Math.max(0, 100 - tasaFallback)) : 0
 
   // Overall health calculation includes friction now
-  const friccionScore = Math.max(0, 100 - (advancedAI.friccion * 5)) 
+  const friccionScore = Math.max(0, 100 - ((advancedAI?.friccion || 0) * 5)) 
   
   // Weights: Comprension (40%), Coherencia (30%), Friccion (20%), Extraccion (10%)
   const healthScore = hasData 
@@ -31,7 +44,7 @@ export async function IAContent({ range = "7d" }: { range?: string }) {
     : 100
 
   // Costo (Gemini Flash: ~$0.15 per 1M tokens blended)
-  const costoTotal = ((advancedAI.total_tokens || 0) / 1_000_000) * 0.15
+  const costoTotal = ((advancedAI?.total_tokens || 0) / 1_000_000) * 0.15
 
   return (
     <div className="space-y-6">
