@@ -12,7 +12,7 @@ interface Tab {
 const tabs: Tab[] = [
   {
     id: "resumen",
-    label: "Resumen Ejecutivo",
+    label: "Resumen",
     icon: (
       <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
         <line x1="18" y1="20" x2="18" y2="10" />
