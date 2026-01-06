@@ -522,3 +522,237 @@ export async function getAdvancedIAMetrics(range: string = "7d") {
    }
 }
 
+// ============================================================================
+// ANÁLISIS GEOGRÁFICO DE TRANSPORTISTAS
+// ============================================================================
+
+// Coordenadas de ciudades argentinas
+export const CIUDADES_ARGENTINA: Record<string, [number, number]> = {
+  "Buenos Aires": [-34.6037, -58.3816],
+  "Córdoba": [-31.4201, -64.1888],
+  "Rosario": [-32.9468, -60.6393],
+  "Mendoza": [-32.8908, -68.8272],
+  "Tucumán": [-26.8083, -65.2176],
+  "Mar del Plata": [-38.0055, -57.5426],
+  "Salta": [-24.7821, -65.4232],
+  "San Juan": [-31.5375, -68.5364],
+  "Neuquén": [-38.9516, -68.0591],
+  "Bahía Blanca": [-38.7196, -62.2724],
+}
+
+// Calcular distancia entre dos puntos (fórmula de Haversine)
+function distanciaHaversine(lat1: number, lon1: number, lat2: number, lon2: number): number {
+  const R = 6371 // Radio de la Tierra en km
+  const dLat = (lat2 - lat1) * Math.PI / 180
+  const dLon = (lon2 - lon1) * Math.PI / 180
+  const a = 
+    Math.sin(dLat/2) * Math.sin(dLat/2) +
+    Math.cos(lat1 * Math.PI / 180) * Math.cos(lat2 * Math.PI / 180) *
+    Math.sin(dLon/2) * Math.sin(dLon/2)
+  const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1-a))
+  return R * c
+}
+
+// Obtener datos geográficos de transportistas con análisis de zonas
+export async function getTransportistasGeoData() {
+  try {
+    const supabase = await createClient()
+    
+    // Obtener transportistas con sus interacciones históricas
+    const { data: transportistas, error } = await supabase
+      .from('b41_transportistas')
+      .select('telefono, nombre, apellido')
+      .limit(50)
+    
+    if (error) throw error
+    if (!transportistas) return []
+
+    // Para cada transportista, obtener sus rutas históricas
+    const transportistasConAnalisis = await Promise.all(
+      transportistas.map(async (t) => {
+        const { data: interacciones } = await supabase
+          .from('b41_interacciones')
+          .select('origen, destino, es_exito, created_at')
+          .eq('telefono', t.telefono)
+          .gte('created_at', new Date(Date.now() - 90 * 24 * 60 * 60 * 1000).toISOString())
+          .not('origen', 'is', null)
+          .not('destino', 'is', null)
+
+        if (!interacciones || interacciones.length === 0) {
+          return null
+        }
+
+        // Contar frecuencia de ubicaciones
+        const ubicacionesFrecuencia: Record<string, number> = {}
+        interacciones.forEach(i => {
+          ubicacionesFrecuencia[i.origen] = (ubicacionesFrecuencia[i.origen] || 0) + 1
+          ubicacionesFrecuencia[i.destino] = (ubicacionesFrecuencia[i.destino] || 0) + 1
+        })
+
+        // Calcular centroide (promedio ponderado)
+        let sumLat = 0, sumLng = 0, sumPesos = 0
+        Object.entries(ubicacionesFrecuencia).forEach(([ciudad, freq]) => {
+          const coords = CIUDADES_ARGENTINA[ciudad]
+          if (coords) {
+            sumLat += coords[0] * freq
+            sumLng += coords[1] * freq
+            sumPesos += freq
+          }
+        })
+
+        const centroide = sumPesos > 0 ? {
+          lat: sumLat / sumPesos,
+          lng: sumLng / sumPesos
+        } : null
+
+        if (!centroide) return null
+
+        // Calcular radio de acción (distancia máxima desde centroide)
+        let radioMax = 0
+        Object.keys(ubicacionesFrecuencia).forEach(ciudad => {
+          const coords = CIUDADES_ARGENTINA[ciudad]
+          if (coords) {
+            const dist = distanciaHaversine(centroide.lat, centroide.lng, coords[0], coords[1])
+            if (dist > radioMax) radioMax = dist
+          }
+        })
+
+        // Identificar top 3 rutas más frecuentes
+        const rutasFrecuencia: Record<string, number> = {}
+        interacciones.forEach(i => {
+          const ruta = `${i.origen} → ${i.destino}`
+          rutasFrecuencia[ruta] = (rutasFrecuencia[ruta] || 0) + 1
+        })
+
+        const topRutas = Object.entries(rutasFrecuencia)
+          .map(([ruta, freq]) => ({ ruta, frecuencia: freq }))
+          .sort((a, b) => b.frecuencia - a.frecuencia)
+          .slice(0, 3)
+
+        // Calcular índice de especialización
+        const rutasUnicas = Object.keys(rutasFrecuencia).length
+        const especializacion = (rutasUnicas / interacciones.length) * 100
+
+        // Calcular tasa de éxito
+        const exitosos = interacciones.filter(i => i.es_exito).length
+        const tasaExito = (exitosos / interacciones.length) * 100
+
+        return {
+          ...t,
+          centroide,
+          radioAccion: Math.round(radioMax),
+          totalViajes: interacciones.length,
+          viajesExitosos: exitosos,
+          tasaExito: Math.round(tasaExito),
+          especializacion: Math.round(especializacion),
+          topRutas,
+          ubicacionesFrecuentes: Object.entries(ubicacionesFrecuencia)
+            .sort((a, b) => b[1] - a[1])
+            .slice(0, 5)
+            .map(([ciudad, freq]) => ({ ciudad, frecuencia: freq }))
+        }
+      })
+    )
+
+    return transportistasConAnalisis.filter(t => t !== null)
+  } catch (error) {
+    console.error("Error in getTransportistasGeoData:", error)
+    return []
+  }
+}
+
+// Mock de cargas disponibles (en producción vendría de tabla b41_cargas_disponibles)
+export async function getCargasDisponibles() {
+  // Por ahora retornamos mock data
+  return [
+    { 
+      id: 1, 
+      origen: "Buenos Aires", 
+      destino: "Rosario", 
+      valor: 850000, 
+      pesoTn: 28, 
+      tipoCamion: "Semi Trailer" 
+    },
+    { 
+      id: 2, 
+      origen: "Buenos Aires", 
+      destino: "Córdoba", 
+      valor: 1100000, 
+      pesoTn: 22, 
+      tipoCamion: "Semi Trailer" 
+    },
+    { 
+      id: 3, 
+      origen: "Rosario", 
+      destino: "Tucumán", 
+      valor: 950000, 
+      pesoTn: 18, 
+      tipoCamion: "Camión Rígido" 
+    },
+    { 
+      id: 4, 
+      origen: "Buenos Aires", 
+      destino: "Mendoza", 
+      valor: 1200000, 
+      pesoTn: 30, 
+      tipoCamion: "Semi Trailer" 
+    },
+    { 
+      id: 5, 
+      origen: "Córdoba", 
+      destino: "Salta", 
+      valor: 780000, 
+      pesoTn: 15, 
+      tipoCamion: "Camión Rígido" 
+    },
+  ]
+}
+
+// Calcular recomendaciones de cargas para un transportista
+export async function getRecomendacionesCargas(
+  transportista: any,
+  cargas: any[]
+) {
+  if (!transportista.centroide) return []
+
+  const recomendaciones = cargas.map(carga => {
+    const origenCoords = CIUDADES_ARGENTINA[carga.origen]
+    const destinoCoords = CIUDADES_ARGENTINA[carga.destino]
+    
+    if (!origenCoords || !destinoCoords) return null
+
+    // Score de proximidad (¿Qué tan cerca está el origen del centroide del transportista?)
+    const distOrigen = distanciaHaversine(
+      transportista.centroide.lat, 
+      transportista.centroide.lng,
+      origenCoords[0], 
+      origenCoords[1]
+    )
+    const scorProximidad = Math.max(0, 1 - distOrigen / (transportista.radioAccion * 1.5))
+
+    // Score de frecuencia (¿Usa esta ruta frecuentemente?)
+    const rutaBuscada = `${carga.origen} → ${carga.destino}`
+    const rutaCoincide = transportista.topRutas.find((r: any) => r.ruta === rutaBuscada)
+    const scorFrecuencia = rutaCoincide 
+      ? rutaCoincide.frecuencia / transportista.totalViajes 
+      : 0
+
+    // Score total (ponderado)
+    const score = (
+      0.6 * scorProximidad +
+      0.4 * scorFrecuencia
+    ) * 100
+
+    return {
+      ...carga,
+      score: Math.round(score),
+      distanciaOrigen: Math.round(distOrigen),
+      esRutaFrecuente: !!rutaCoincide
+    }
+  }).filter(r => r !== null && r.score > 20) // Solo mostrar si score > 20%
+
+  return recomendaciones
+    .sort((a: any, b: any) => b.score - a.score)
+    .slice(0, 5)
+}
+

@@ -1,183 +1,323 @@
 "use client"
 
 import { useEffect, useRef, useState } from "react"
+import { TransportistaDetailPanel } from "@/components/TransportistaDetailPanel"
+
+// Datos de ciudades argentinas (movido del módulo servidor)
+const CIUDADES_ARGENTINA: Record<string, [number, number]> = {
+  "Buenos Aires": [-34.6037, -58.3816],
+  "Córdoba": [-31.4201, -64.1888],
+  "Rosario": [-32.9468, -60.6393],
+  "Mendoza": [-32.8908, -68.8272],
+  "Tucumán": [-26.8083, -65.2176],
+  "Mar del Plata": [-38.0055, -57.5426],
+  "Salta": [-24.7821, -65.4232],
+  "San Juan": [-31.5375, -68.5364],
+  "Neuquén": [-38.9516, -68.0591],
+  "Bahía Blanca": [-38.7196, -62.2724],
+}
 
 declare global {
   interface Window {
-    L: any
+    L: typeof import("leaflet")
   }
 }
 
-// Mock Data for Demo
-const MOCK_DRIVERS = [
-  { id: 1, name: "Juan Perez", lat: -34.6037, lng: -58.3816, location: "Buenos Aires", status: "Disponible" },
-  { id: 2, name: "Carlos Gomez", lat: -31.4201, lng: -64.1888, location: "Córdoba", status: "En Viaje" },
-  { id: 3, name: "Miguel Rodriguez", lat: -32.9468, lng: -60.6393, location: "Rosario", status: "Disponible" },
-]
-
-const MOCK_LOADS = [
-  { id: 101, origen: "Buenos Aires", destino: "Mendoza", tarifa: "$1.2M", distancia: "1050 km" },
-  { id: 102, origen: "Rosario", destino: "Córdoba", tarifa: "$600k", distancia: "400 km" },
-  { id: 103, origen: "Córdoba", destino: "Tucumán", tarifa: "$950k", distancia: "550 km" },
-]
-
-interface GeoContentProps {
-  stats?: {
-    ciudades: number
-    rutas: number
-    distancia: number
-  }
-}
-
-export function GeoContent({ stats = { ciudades: 12, rutas: 8, distancia: 4500 } }: GeoContentProps) {
+export function GeoContent() {
   const mapRef = useRef<HTMLDivElement>(null)
-  const [selectedDriver, setSelectedDriver] = useState<any>(null)
-  const [isCalculating, setIsCalculating] = useState(false)
-  const [recommendations, setRecommendations] = useState<any[]>([])
+  const mapInstanceRef = useRef<L.Map | null>(null)
+  const [transportistas, setTransportistas] = useState<any[]>([])
+  const [selectedTransportista, setSelectedTransportista] = useState<any>(null)
+  const [cargasRecomendadas, setCargasRecomendadas] = useState<any[]>([])
+  const [isLoading, setIsLoading] = useState(true)
+  const [radioCircle, setRadioCircle] = useState<any>(null)
 
+  // Cargar datos de transportistas
   useEffect(() => {
-    // Dynamic import of Leaflet to avoid SSR issues
-    import("leaflet").then((L) => {
-      // Fix marker icon issues in Next.js
-      // @ts-ignore
-      delete L.Icon.Default.prototype._getIconUrl;
-      L.Icon.Default.mergeOptions({
-        iconRetinaUrl: 'https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.7.1/images/marker-icon-2x.png',
-        iconUrl: 'https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.7.1/images/marker-icon.png',
-        shadowUrl: 'https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.7.1/images/marker-shadow.png',
-      });
-
-      if (!mapRef.current) return
-      if ((mapRef.current as any)._leaflet_id) return // Map already initialized
-
-      const map = L.map(mapRef.current).setView([-34.6, -58.4], 5)
-
-      L.tileLayer("https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png", {
-        attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors &copy; <a href="https://carto.com/attributions">CARTO</a>',
-        subdomains: 'abcd',
-        maxZoom: 19
-      }).addTo(map)
-
-      // Add Driver Markers
-      MOCK_DRIVERS.forEach(driver => {
-        const marker = L.marker([driver.lat, driver.lng])
-          .addTo(map)
-          .bindPopup(`<b>${driver.name}</b><br>${driver.status}`)
-        
-        marker.on('click', () => {
-          handleDriverSelect(driver)
-        })
-      })
-    })
+    async function loadData() {
+      setIsLoading(true)
+      const { loadTransportistasGeoData } = await import("@/app/actions/geo-actions")
+      const data = await loadTransportistasGeoData()
+      setTransportistas(data)
+      setIsLoading(false)
+    }
+    loadData()
   }, [])
 
-  const handleDriverSelect = (driver: any) => {
-    setSelectedDriver(driver)
-    setIsCalculating(true)
-    setRecommendations([])
+  // Inicializar mapa Leaflet
+  useEffect(() => {
+    if (typeof window !== "undefined" && !window.L) {
+      const link = document.createElement("link")
+      link.rel = "stylesheet"
+      link.href = "https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"
+      document.head.appendChild(link)
 
-    // Simulate "Promediando viajes..." calculation
-    setTimeout(() => {
-        setIsCalculating(false)
-        // Filter loads "near" the driver (mock logic)
-        const nearby = MOCK_LOADS.filter(l => l.origen === driver.location || Math.random() > 0.5)
-        setRecommendations(nearby)
-    }, 1500)
+      const script = document.createElement("script")
+      script.src = "https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"
+      script.onload = initMap
+      document.head.appendChild(script)
+    } else if (window.L) {
+      initMap()
+    }
+
+    function initMap() {
+      if (!mapRef.current || mapInstanceRef.current) return
+
+      const L = window.L
+      const map = L.map(mapRef.current).setView([-34.6037, -58.3816], 5)
+      mapInstanceRef.current = map
+
+      // Usar estilo oscuro de CartoDB
+      L.tileLayer("https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png", {
+        attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>',
+        maxZoom: 19,
+      }).addTo(map)
+
+      // Agregar marcadores de ciudades
+      Object.entries(CIUDADES_ARGENTINA).forEach(([ciudad, coords]) => {
+        L.circleMarker(coords as [number, number], {
+          radius: 6,
+          fillColor: "#3b82f6",
+          color: "#60a5fa",
+          weight: 2,
+          opacity: 0.8,
+          fillOpacity: 0.5,
+        }).addTo(map).bindPopup(`
+          <div style="background: #0a0a0a; color: white; padding: 8px; border-radius: 8px;">
+            <strong>${ciudad}</strong>
+          </div>
+        `)
+      })
+
+      // Dibujar líneas de conexión
+      const connections = [
+        ["Buenos Aires", "Córdoba"],
+        ["Buenos Aires", "Rosario"],
+        ["Buenos Aires", "Mendoza"],
+        ["Córdoba", "Tucumán"],
+        ["Rosario", "Córdoba"],
+        ["Mendoza", "San Juan"],
+        ["Buenos Aires", "Mar del Plata"],
+        ["Buenos Aires", "Bahía Blanca"],
+        ["Córdoba", "Salta"],
+        ["Neuquén", "Bahía Blanca"],
+      ]
+
+      connections.forEach(([from, to]) => {
+        const fromCoords = CIUDADES_ARGENTINA[from]
+        const toCoords = CIUDADES_ARGENTINA[to]
+        if (fromCoords && toCoords) {
+          L.polyline([fromCoords, toCoords], {
+            color: "#3b82f6",
+            weight: 2,
+            opacity: 0.3,
+            dashArray: "5, 10",
+          }).addTo(map)
+        }
+      })
+    }
+
+    return () => {
+      if (mapInstanceRef.current) {
+        mapInstanceRef.current.remove()
+        mapInstanceRef.current = null
+      }
+    }
+  }, [])
+
+  // Actualizar marcadores de transportistas cuando se cargan
+  useEffect(() => {
+    if (!mapInstanceRef.current || !window.L || transportistas.length === 0) return
+
+    const L = window.L
+    const map = mapInstanceRef.current
+
+    // Agregar marcadores de transportistas
+    transportistas.forEach((t) => {
+      if (!t.centroide) return
+
+      const marker = L.marker([t.centroide.lat, t.centroide.lng], {
+        icon: L.divIcon({
+          className: 'custom-marker',
+          html: `
+            <div style="
+              background: linear-gradient(135deg, #10b981 0%, #059669 100%);
+              width: 32px;
+              height: 32px;
+              border-radius: 50%;
+              border: 3px solid #fff;
+              display: flex;
+              align-items: center;
+              justify-content: center;
+              box-shadow: 0 4px 12px rgba(16, 185, 129, 0.5);
+              cursor: pointer;
+              font-size: 16px;
+            ">
+              🚛
+            </div>
+          `,
+          iconSize: [32, 32],
+          iconAnchor: [16, 16],
+        })
+      }).addTo(map)
+
+      marker.on('click', async () => {
+        handleTransportistaClick(t)
+      })
+
+      marker.bindPopup(`
+        <div style="background: #0a0a0a; color: white; padding: 12px; border-radius: 8px; min-width: 200px;">
+          <strong style="font-size: 14px;">${t.nombre} ${t.apellido}</strong>
+          <div style="margin-top: 8px; font-size: 12px; color: #a1a1aa;">
+            <div>📊 ${t.totalViajes} viajes</div>
+            <div>✅ ${t.tasaExito}% éxito</div>
+            <div>📍 ${t.radioAccion} km radio</div>
+          </div>
+          <button style="
+            margin-top: 8px;
+            width: 100%;
+            background: #3b82f6;
+            color: white;
+            padding: 6px;
+            border-radius: 6px;
+            border: none;
+            cursor: pointer;
+            font-size: 12px;
+            font-weight: 600;
+          ">
+            Ver Detalles →
+          </button>
+        </div>
+      `)
+    })
+  }, [transportistas])
+
+  // Manejar clic en transportista
+  async function handleTransportistaClick(transportista: any) {
+    setSelectedTransportista(transportista)
+
+    // Obtener cargas disponibles
+    const { loadCargasDisponibles, loadRecomendacionesCargas } = await import("@/app/actions/geo-actions")
+    const cargasDisp = await loadCargasDisponibles()
+    const recomendaciones = await loadRecomendacionesCargas(transportista, cargasDisp)
+    setCargasRecomendadas(recomendaciones)
+
+    // Dibujar círculo de radio de acción
+    if (mapInstanceRef.current && window.L) {
+      // Remover círculo anterior si existe
+      if (radioCircle) {
+        mapInstanceRef.current.removeLayer(radioCircle)
+      }
+
+      const L = window.L
+      const circle = L.circle([transportista.centroide.lat, transportista.centroide.lng], {
+        radius: transportista.radioAccion * 1000, // convertir a metros
+        color: '#10b981',
+        fillColor: '#10b981',
+        fillOpacity: 0.1,
+        weight: 2,
+        dashArray: '10, 10',
+      }).addTo(mapInstanceRef.current)
+
+      setRadioCircle(circle)
+
+      // Centrar mapa en el transportista
+      mapInstanceRef.current.setView([transportista.centroide.lat, transportista.centroide.lng], 6)
+    }
+  }
+
+  function handleClosePanel() {
+    setSelectedTransportista(null)
+    setCargasRecomendadas([])
+    
+    // Remover círculo de radio
+    if (radioCircle && mapInstanceRef.current) {
+      mapInstanceRef.current.removeLayer(radioCircle)
+      setRadioCircle(null)
+    }
   }
 
   return (
     <div className="space-y-6">
+      {/* Header */}
       <div className="flex items-center gap-3 mb-6">
-        <div className="w-12 h-12 rounded-xl bg-gradient-to-br from-indigo-500 to-cyan-500 flex items-center justify-center">
-            <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="2">
-                <circle cx="12" cy="12" r="10" />
-                <polygon points="16.24 7.76 14.12 14.12 7.76 16.24 9.88 9.88 16.24 7.76" />
-            </svg>
+        <div className="w-12 h-12 rounded-xl bg-gradient-to-br from-emerald-500 to-teal-500 flex items-center justify-center">
+          <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="2">
+            <path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z" />
+            <circle cx="12" cy="10" r="3" />
+          </svg>
         </div>
         <div>
-          <h2 className="text-xl font-bold text-white">Mapa Interactivo</h2>
-          <p className="text-sm text-zinc-500">Geolocalización de flota y oportunidades de carga</p>
+          <h2 className="text-xl font-bold text-white">Mapa Interactivo con Análisis Geográfico</h2>
+          <p className="text-sm text-zinc-500">
+            Visualización de flota y recomendaciones inteligentes por zona
+          </p>
         </div>
       </div>
 
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-        {/* MAPA */}
-        <div className="lg:col-span-2 bg-[#0a0a0a] border border-white/[0.06] rounded-xl overflow-hidden h-[500px] relative">
-            <div ref={mapRef} className="w-full h-full" style={{ zIndex: 0 }} />
-            
-            {/* Overlay Info */}
-            <div className="absolute top-4 right-4 bg-black/80 backdrop-blur-md p-4 rounded-lg border border-white/10 text-xs z-[400]">
-                <p className="font-bold text-white mb-2">Transportistas en Mapa</p>
-                {MOCK_DRIVERS.map(d => (
-                    <div key={d.id} className="flex items-center gap-2 mb-1 cursor-pointer hover:text-blue-400" onClick={() => handleDriverSelect(d)}>
-                        <div className={`w-2 h-2 rounded-full ${d.status === 'Disponible' ? 'bg-emerald-500' : 'bg-amber-500'}`} />
-                        <span className="text-zinc-300">{d.name}</span>
-                    </div>
-                ))}
+      {/* Mapa */}
+      <div className="bg-[#0a0a0a] border border-white/[0.06] rounded-xl p-4 relative">
+        {isLoading && (
+          <div className="absolute top-4 right-4 z-10 bg-blue-500/10 border border-blue-500/20 text-blue-400 px-4 py-2 rounded-lg text-sm font-semibold">
+            🔄 Cargando transportistas...
+          </div>
+        )}
+        <div 
+          ref={mapRef} 
+          className="h-[500px] rounded-lg overflow-hidden"
+          style={{ background: "#111" }}
+        />
+        
+        {/* Leyenda flotante */}
+        <div className="absolute bottom-8 left-8 bg-[#0a0a0a]/95 backdrop-blur-sm border border-white/[0.06] rounded-lg p-4 z-10">
+          <h4 className="text-xs font-bold text-white mb-3">Leyenda</h4>
+          <div className="space-y-2">
+            <div className="flex items-center gap-2">
+              <div className="w-6 h-6 rounded-full bg-gradient-to-br from-emerald-500 to-emerald-600 flex items-center justify-center text-xs">
+                🚛
+              </div>
+              <span className="text-xs text-zinc-300">Transportista activo</span>
             </div>
-        </div>
-
-        {/* SIDEBAR RECOMENDACIONES */}
-        <div className="bg-[#0a0a0a] border border-white/[0.06] rounded-xl p-6 flex flex-col">
-            <h3 className="text-sm font-semibold text-white mb-4">Detalle de Operación</h3>
-            
-            {!selectedDriver ? (
-                <div className="flex-1 flex flex-col items-center justify-center text-zinc-500 text-center p-4">
-                    <svg className="w-12 h-12 mb-4 opacity-50" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1">
-                        <circle cx="12" cy="12" r="10" />
-                        <path d="M12 8v4l3 3" />
-                    </svg>
-                    <p>Selecciona un transportista en el mapa para analizar oportunidades.</p>
-                </div>
-            ) : (
-                <div className="flex-1 flex flex-col animate-in fade-in slide-in-from-right-4 duration-500">
-                    <div className="flex items-center gap-3 mb-6 p-3 bg-zinc-900/50 rounded-lg border border-white/5">
-                        <div className="w-10 h-10 rounded-full bg-blue-500/20 flex items-center justify-center text-blue-400 font-bold">
-                            {selectedDriver.name.charAt(0)}
-                        </div>
-                        <div>
-                            <p className="font-bold text-white">{selectedDriver.name}</p>
-                            <p className="text-xs text-emerald-400 flex items-center gap-1">
-                                <span className="w-1.5 h-1.5 rounded-full bg-emerald-500" />
-                                {selectedDriver.status} • {selectedDriver.location}
-                            </p>
-                        </div>
-                    </div>
-
-                    {isCalculating ? (
-                        <div className="flex-1 flex flex-col items-center justify-center space-y-4">
-                            <div className="w-8 h-8 border-2 border-blue-500 border-t-transparent rounded-full animate-spin" />
-                            <p className="text-sm text-blue-400 animate-pulse">Promediando viajes históricos...</p>
-                            <p className="text-xs text-zinc-500">Analizando rutas frecuentes</p>
-                        </div>
-                    ) : (
-                        <div className="space-y-4">
-                            <p className="text-xs font-semibold text-zinc-400 uppercase tracking-wider">Cargas Recomendadas (IA)</p>
-                            {recommendations.length > 0 ? (
-                                recommendations.map(load => (
-                                    <div key={load.id} className="p-3 bg-zinc-900/50 hover:bg-zinc-800 transition-colors border border-white/5 rounded-lg cursor-pointer group">
-                                        <div className="flex justify-between items-start mb-2">
-                                            <span className="text-sm font-bold text-white group-hover:text-blue-400 transition-colors">{load.origen} → {load.destino}</span>
-                                            <span className="text-xs font-bold text-emerald-400 bg-emerald-500/10 px-2 py-0.5 rounded">{load.tarifa}</span>
-                                        </div>
-                                        <div className="flex items-center gap-4 text-xs text-zinc-500">
-                                            <span className="flex items-center gap-1">
-                                                <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M13 2L3 14h9l-1 8 10-12h-9l1-8z"/></svg>
-                                                Match 90%
-                                            </span>
-                                            <span>{load.distancia}</span>
-                                        </div>
-                                    </div>
-                                ))
-                            ) : (
-                                <p className="text-sm text-zinc-500 text-center py-4">No hay cargas cercanas disponibles.</p>
-                            )}
-                        </div>
-                    )}
-                </div>
-            )}
+            <div className="flex items-center gap-2">
+              <div className="w-3 h-3 rounded-full bg-blue-500" />
+              <span className="text-xs text-zinc-300">Ciudad</span>
+            </div>
+            <div className="flex items-center gap-2">
+              <div className="w-6 h-0.5 bg-blue-500/50" style={{ borderTop: '2px dashed #3b82f6' }} />
+              <span className="text-xs text-zinc-300">Ruta</span>
+            </div>
+          </div>
         </div>
       </div>
+
+      {/* Stats */}
+      <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+        <div className="bg-[#0a0a0a] border border-white/[0.06] rounded-xl p-6 text-center">
+          <p className="text-3xl font-bold text-emerald-400">{transportistas.length}</p>
+          <p className="text-sm text-zinc-500 mt-1">Transportistas Analizados</p>
+        </div>
+        <div className="bg-[#0a0a0a] border border-white/[0.06] rounded-xl p-6 text-center">
+          <p className="text-3xl font-bold text-blue-400">{Object.keys(CIUDADES_ARGENTINA).length}</p>
+          <p className="text-sm text-zinc-500 mt-1">Ciudades Conectadas</p>
+        </div>
+        <div className="bg-[#0a0a0a] border border-white/[0.06] rounded-xl p-6 text-center">
+          <p className="text-3xl font-bold text-purple-400">
+            {transportistas.length > 0 
+              ? Math.round(transportistas.reduce((acc, t) => acc + t.radioAccion, 0) / transportistas.length)
+              : 0}
+          </p>
+          <p className="text-sm text-zinc-500 mt-1">Radio Promedio (km)</p>
+        </div>
+      </div>
+
+      {/* Panel lateral */}
+      {selectedTransportista && (
+        <TransportistaDetailPanel
+          transportista={selectedTransportista}
+          cargas={cargasRecomendadas}
+          onClose={handleClosePanel}
+        />
+      )}
     </div>
   )
 }
