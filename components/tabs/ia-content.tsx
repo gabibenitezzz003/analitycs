@@ -1,10 +1,12 @@
-import { getMetricas, getAnalisisSentimiento, getIAMetrics } from "@/lib/queries"
+import { getMetricas, getAnalisisSentimiento, getIAMetrics, getAdvancedIAMetrics, getFallbacks } from "@/lib/queries"
 
 export async function IAContent({ range = "7d" }: { range?: string }) {
-  const [metricas, sentimiento, iaMetrics] = await Promise.all([
+  const [metricas, sentimiento, iaMetrics, advancedAI, fallbacks] = await Promise.all([
     getMetricas(range),
     getAnalisisSentimiento(range),
-    getIAMetrics(range)
+    getIAMetrics(range),
+    getAdvancedIAMetrics(range),
+    getFallbacks()
   ])
   
   const tasaFallback = metricas.tasa_fallback || 0
@@ -15,10 +17,21 @@ export async function IAContent({ range = "7d" }: { range?: string }) {
   const hasData = metricas.total_mensajes > 0
   const comprension = hasData ? Math.min(100, Math.max(0, 100 - tasaFallback)) : 0
 
-  // Overall health - weighted average, zero if no metrics
-  const healthScore = (comprension + extraccion + coherencia) > 0 
-    ? Math.round((comprension + extraccion + coherencia) / 3)
-    : 0
+  // Overall health calculation includes friction now
+  const friccionScore = Math.max(0, 100 - (advancedAI.friccion * 5)) 
+  
+  // Weights: Comprension (40%), Coherencia (30%), Friccion (20%), Extraccion (10%)
+  const healthScore = hasData 
+    ? Math.round(
+        (comprension * 0.4) + 
+        (coherencia * 0.3) + 
+        (friccionScore * 0.2) + 
+        (extraccion * 0.1)
+      ) 
+    : 100
+
+  // Costo (Gemini Flash: ~$0.15 per 1M tokens blended)
+  const costoTotal = ((advancedAI.total_tokens || 0) / 1_000_000) * 0.15
 
   return (
     <div className="space-y-6">
@@ -33,12 +46,12 @@ export async function IAContent({ range = "7d" }: { range?: string }) {
         </div>
         <div>
           <h2 className="text-xl font-bold text-white">Performance del Motor IA</h2>
-          <p className="text-sm text-zinc-500">Métricas de rendimiento del sistema de negociación automática</p>
+          <p className="text-sm text-zinc-500">Métricas de rendimiento e inteligencia artificial</p>
         </div>
       </div>
 
       {/* KPIs IA */}
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+      <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
         {/* Tasa Éxito */}
         <div className="bg-[#0a0a0a] border border-white/[0.06] rounded-xl p-6">
           <div className="flex items-center justify-between mb-4">
@@ -49,14 +62,10 @@ export async function IAContent({ range = "7d" }: { range?: string }) {
               </svg>
             </div>
           </div>
-          <p className="text-4xl font-bold text-emerald-400 tabular-nums">{tasaExito.toFixed(1)}%</p>
-          <div className="mt-4 w-full bg-zinc-800 rounded-full h-2 overflow-hidden">
-            <div 
-              className="bg-gradient-to-r from-emerald-500 to-emerald-400 h-2 rounded-full transition-all duration-1000" 
-              style={{ width: `${tasaExito}%` }} 
-            />
+          <p className="text-3xl font-bold text-emerald-400 tabular-nums">{tasaExito.toFixed(1)}%</p>
+          <div className="mt-4 w-full bg-zinc-800 rounded-full h-1.5 overflow-hidden">
+            <div className="bg-emerald-500 h-1.5 rounded-full duration-1000" style={{ width: `${tasaExito}%` }} />
           </div>
-          <p className="text-xs text-zinc-500 mt-2">Mensajes procesados correctamente</p>
         </div>
 
         {/* Tasa Fallback */}
@@ -65,26 +74,20 @@ export async function IAContent({ range = "7d" }: { range?: string }) {
             <span className="text-sm text-zinc-400">Tasa de Fallback</span>
             <div className="w-10 h-10 rounded-lg bg-red-500/10 flex items-center justify-center">
               <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#ef4444" strokeWidth="2">
-                <circle cx="12" cy="12" r="10" />
-                <line x1="12" y1="8" x2="12" y2="12" />
-                <line x1="12" y1="16" x2="12.01" y2="16" />
+                <path d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
               </svg>
             </div>
           </div>
-          <p className="text-4xl font-bold text-red-400 tabular-nums">{tasaFallback.toFixed(1)}%</p>
-          <div className="mt-4 w-full bg-zinc-800 rounded-full h-2 overflow-hidden">
-            <div 
-              className="bg-gradient-to-r from-red-500 to-red-400 h-2 rounded-full transition-all duration-1000" 
-              style={{ width: `${Math.min(tasaFallback * 5, 100)}%` }} 
-            />
+          <p className="text-3xl font-bold text-red-400 tabular-nums">{tasaFallback.toFixed(1)}%</p>
+          <div className="mt-4 w-full bg-zinc-800 rounded-full h-1.5 overflow-hidden">
+            <div className="bg-red-500 h-1.5 rounded-full duration-1000" style={{ width: `${Math.min(tasaFallback * 5, 100)}%` }} />
           </div>
-          <p className="text-xs text-zinc-500 mt-2">Derivados a humano</p>
         </div>
 
         {/* Tiempo Respuesta */}
         <div className="bg-[#0a0a0a] border border-white/[0.06] rounded-xl p-6">
           <div className="flex items-center justify-between mb-4">
-            <span className="text-sm text-zinc-400">Tiempo Promedio</span>
+            <span className="text-sm text-zinc-400">Tiempo Respuesta</span>
             <div className="w-10 h-10 rounded-lg bg-blue-500/10 flex items-center justify-center">
               <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#3b82f6" strokeWidth="2">
                 <circle cx="12" cy="12" r="10" />
@@ -92,114 +95,105 @@ export async function IAContent({ range = "7d" }: { range?: string }) {
               </svg>
             </div>
           </div>
-          <p className="text-4xl font-bold text-blue-400 tabular-nums">{tiempo_respuesta}s</p>
-          <div className="mt-4 w-full bg-zinc-800 rounded-full h-2 overflow-hidden">
-            <div 
-              className="bg-gradient-to-r from-blue-500 to-cyan-400 h-2 rounded-full transition-all duration-1000" 
-              style={{ width: `${Math.min(tiempo_respuesta * 30, 100)}%` }} 
-            />
-          </div>
-          <p className="text-xs text-zinc-500 mt-2">Tiempo de respuesta promedio</p>
+          <p className="text-3xl font-bold text-blue-400 tabular-nums">{tiempo_respuesta}s</p>
+          <p className="text-xs text-zinc-500 mt-2">Promedio por sesión</p>
+        </div>
+
+        {/* Tokens / Costo */}
+        <div className="bg-[#0a0a0a] border border-white/[0.06] rounded-xl p-6">
+            <div className="flex items-center justify-between mb-4">
+                <span className="text-sm text-zinc-400">Costo Estimado</span>
+                <div className="w-10 h-10 rounded-lg bg-purple-500/10 flex items-center justify-center">
+                    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#a855f7" strokeWidth="2">
+                        <path d="M12 2v20M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6" />
+                    </svg>
+                </div>
+            </div>
+            <div className="flex items-baseline gap-2">
+              <p className="text-3xl font-bold text-purple-400 tabular-nums">${costoTotal.toFixed(3)}</p>
+              <span className="text-xs text-zinc-500">USD</span>
+            </div>
+            <p className="text-xs text-zinc-500 mt-2">{(advancedAI.total_tokens || 0).toLocaleString()} tokens usados</p>
         </div>
       </div>
 
-      {/* Health Score */}
-      <div className="bg-[#0a0a0a] border border-white/[0.06] rounded-xl p-6">
-        <h3 className="text-sm font-semibold text-white mb-6 flex items-center gap-2">
-          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-            <path d="M22 12h-4l-3 9L9 3l-3 9H2" />
-          </svg>
-          Health Score del Motor IA
-        </h3>
-        
-        <div className="flex items-center gap-8">
-          <div className="relative w-32 h-32">
-            <svg className="w-32 h-32 transform -rotate-90" viewBox="0 0 36 36">
-              <circle cx="18" cy="18" r="15.9" fill="none" stroke="#27272a" strokeWidth="3" />
-              <circle 
-                cx="18" 
-                cy="18" 
-                r="15.9" 
-                fill="none" 
-                stroke="url(#gradient)" 
-                strokeWidth="3"
-                strokeDasharray={`${healthScore}, 100`}
-                strokeLinecap="round"
-              />
-              <defs>
-                <linearGradient id="gradient" x1="0%" y1="0%" x2="100%" y2="0%">
-                  <stop offset="0%" stopColor="#06b6d4" />
-                  <stop offset="100%" stopColor="#3b82f6" />
-                </linearGradient>
-              </defs>
-            </svg>
-            <div className="absolute inset-0 flex items-center justify-center">
-              <span className="text-3xl font-bold text-cyan-400">{healthScore}%</span>
-            </div>
-          </div>
-          
-          <div className="flex-1 space-y-4">
-            <div>
-              <div className="flex justify-between text-sm mb-1">
-                <span className="text-zinc-400">Comprensión de Intención</span>
-                <span className="text-emerald-400 font-semibold">{comprension.toFixed(0)}%</span>
-              </div>
-              <div className="w-full bg-zinc-800 rounded-full h-2">
-                <div className="bg-emerald-500 h-2 rounded-full" style={{ width: `${comprension}%` }} />
-              </div>
-            </div>
-            <div>
-              <div className="flex justify-between text-sm mb-1">
-                <span className="text-zinc-400">Extracción de Datos</span>
-                <span className="text-blue-400 font-semibold">{extraccion}%</span>
-              </div>
-              <div className="w-full bg-zinc-800 rounded-full h-2">
-                <div className="bg-blue-500 h-2 rounded-full" style={{ width: `${extraccion}%` }} />
-              </div>
-            </div>
-            <div>
-              <div className="flex justify-between text-sm mb-1">
-                <span className="text-zinc-400">Respuestas Coherentes</span>
-                <span className="text-purple-400 font-semibold">{coherencia}%</span>
-              </div>
-              <div className="w-full bg-zinc-800 rounded-full h-2">
-                <div className="bg-purple-500 h-2 rounded-full" style={{ width: `${coherencia}%` }} />
-              </div>
-            </div>
-          </div>
-        </div>
-      </div>
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+         {/* Causas de Error (Top Fallbacks) */}
+         <div className="bg-[#0a0a0a] border border-white/[0.06] rounded-xl p-6">
+            <h3 className="text-sm font-semibold text-white mb-6">Top Causas de Fallo (Pareto)</h3>
+            {fallbacks.length > 0 ? (
+                <div className="space-y-4">
+                    {fallbacks.map((f: any, i: number) => (
+                        <div key={i}>
+                            <div className="flex justify-between text-xs mb-1">
+                                <span className="text-zinc-300">{f.motivo_fallback || "Sin motivo especificado"}</span>
+                                <span className="text-zinc-500">{f.porcentaje}% ({f.cantidad})</span>
+                            </div>
+                            <div className="w-full bg-zinc-800 rounded-full h-1.5">
+                                <div className="bg-red-500/70 h-1.5 rounded-full" style={{ width: `${f.porcentaje}%` }} />
+                            </div>
+                        </div>
+                    ))}
+                </div>
+            ) : (
+                <div className="h-40 flex items-center justify-center text-zinc-600 text-sm">
+                    No hay fallos registrados. ¡Excelente!
+                </div>
+            )}
+         </div>
 
-      {/* Análisis de Sentimiento */}
-      <div className="bg-[#0a0a0a] border border-white/[0.06] rounded-xl p-6">
-        <h3 className="text-sm font-semibold text-white mb-6 flex items-center gap-2">
-          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-            <circle cx="12" cy="12" r="10" />
-            <path d="M8 14s1.5 2 4 2 4-2 4-2" />
-            <line x1="9" y1="9" x2="9.01" y2="9" />
-            <line x1="15" y1="9" x2="15.01" y2="9" />
-          </svg>
-          Análisis de Sentimiento
-        </h3>
-        
-        <div className="grid grid-cols-3 gap-4">
-          <div className="text-center p-4 bg-emerald-500/5 rounded-xl border border-emerald-500/10">
-            <span className="text-4xl mb-2 block">😊</span>
-            <p className="text-2xl font-bold text-emerald-400">{sentimiento.positivo.toFixed(1)}%</p>
-            <p className="text-xs text-zinc-500 mt-1">Positivo</p>
-          </div>
-          <div className="text-center p-4 bg-zinc-700/20 rounded-xl border border-zinc-700/30">
-            <span className="text-4xl mb-2 block">😐</span>
-            <p className="text-2xl font-bold text-zinc-400">{sentimiento.neutro.toFixed(1)}%</p>
-            <p className="text-xs text-zinc-500 mt-1">Neutro</p>
-          </div>
-          <div className="text-center p-4 bg-red-500/5 rounded-xl border border-red-500/10">
-            <span className="text-4xl mb-2 block">😞</span>
-            <p className="text-2xl font-bold text-red-400">{sentimiento.negativo.toFixed(1)}%</p>
-            <p className="text-xs text-zinc-500 mt-1">Negativo</p>
-          </div>
-        </div>
+         {/* Health Score Detallado */}
+         <div className="bg-[#0a0a0a] border border-white/[0.06] rounded-xl p-6">
+            <h3 className="text-sm font-semibold text-white mb-6">Health Score IA</h3>
+            <div className="flex items-center gap-8">
+                <div className="relative w-32 h-32">
+                    <svg className="w-32 h-32 transform -rotate-90" viewBox="0 0 36 36">
+                    <circle cx="18" cy="18" r="15.9" fill="none" stroke="#27272a" strokeWidth="3" />
+                    <circle 
+                        cx="18" 
+                        cy="18" 
+                        r="15.9" 
+                        fill="none" 
+                        stroke="url(#gradient)" 
+                        strokeWidth="3"
+                        strokeDasharray={`${healthScore}, 100`}
+                        strokeLinecap="round"
+                    />
+                    <defs>
+                        <linearGradient id="gradient" x1="0%" y1="0%" x2="100%" y2="0%">
+                        <stop offset="0%" stopColor="#06b6d4" />
+                        <stop offset="100%" stopColor="#3b82f6" />
+                        </linearGradient>
+                    </defs>
+                    </svg>
+                    <div className="absolute inset-0 flex items-center justify-center">
+                    <span className="text-3xl font-bold text-cyan-400">{healthScore}%</span>
+                    </div>
+                </div>
+                
+                <div className="flex-1 space-y-3">
+                    <MetricBar label="Comprensión" value={comprension} color="bg-emerald-500" />
+                    <MetricBar label="Extracción Datos" value={extraccion} color="bg-blue-500" />
+                    <MetricBar label="Coherencia" value={coherencia} color="bg-purple-500" />
+                    <MetricBar label="Baja Fricción" value={Math.max(0, 100 - (advancedAI.friccion * 2))} color="bg-orange-500" />
+                </div>
+            </div>
+         </div>
       </div>
     </div>
   )
+}
+
+function MetricBar({ label, value, color }: { label: string, value: number, color: string }) {
+    return (
+        <div>
+            <div className="flex justify-between text-xs mb-1">
+                <span className="text-zinc-400">{label}</span>
+                <span className="text-white font-mono">{value.toFixed(0)}%</span>
+            </div>
+            <div className="w-full bg-zinc-800 rounded-full h-1.5">
+                <div className={`${color} h-1.5 rounded-full`} style={{ width: `${value}%` }} />
+            </div>
+        </div>
+    )
 }
