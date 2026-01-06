@@ -5,6 +5,7 @@ import { ConversionContent } from "@/components/tabs/conversion-content"
 import { IAContent } from "@/components/tabs/ia-content"
 import { TransportistasContent } from "@/components/tabs/transportistas-content"
 import { GeoContent } from "@/components/tabs/geo-content"
+import { getGeoStats } from "@/lib/queries"
 
 function LoadingState({ text = "Cargando..." }: { text?: string }) {
   return (
@@ -24,6 +25,7 @@ export default async function DashboardPage({
 }) {
   const resolvedParams = await searchParams
   const range = (resolvedParams.range as string) || "7d"
+  const geoStats = await getGeoStats(range)
 
   return (
     <Suspense fallback={<LoadingState text="Cargando dashboard..." />}>
@@ -49,7 +51,7 @@ export default async function DashboardPage({
             <TransportistasContent range={range} />
           </Suspense>
         }
-        geoContent={<GeoContent />}
+        geoContent={<GeoContent stats={geoStats} />}
       />
     </Suspense>
   )

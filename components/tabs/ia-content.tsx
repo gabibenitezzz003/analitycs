@@ -1,24 +1,22 @@
-import { getMetricas, getAnalisisSentimiento } from "@/lib/queries"
+import { getMetricas, getAnalisisSentimiento, getIAMetrics } from "@/lib/queries"
 
 export async function IAContent({ range = "7d" }: { range?: string }) {
-  const [metricas, sentimiento] = await Promise.all([
+  const [metricas, sentimiento, iaMetrics] = await Promise.all([
     getMetricas(range),
-    getAnalisisSentimiento(range)
+    getAnalisisSentimiento(range),
+    getIAMetrics(range)
   ])
   
   const tasaFallback = metricas.tasa_fallback || 0
   const tasaExito = 100 - tasaFallback
-  const tiempoRespuesta = 1.25 // Still mocked as we don't have this column yet
+  const { tiempo_respuesta, extraccion, coherencia } = iaMetrics
   
-  // Custom logic for health score components based on available data or reasonable proxies
-  // Comprension: inverse of fallback? Or just high if conversions are high? 
-  // Let's use (100 - fallback) as base
   const comprension = Math.min(100, Math.max(0, 100 - tasaFallback)) 
-  const extraccion = 89 // Static for now
-  const coherencia = 91 // Static for now
 
-  // Overall health
-  const healthScore = Math.round((comprension + extraccion + coherencia) / 3)
+  // Overall health - weighted average, zero if no metrics
+  const healthScore = (comprension + extraccion + coherencia) > 0 
+    ? Math.round((comprension + extraccion + coherencia) / 3)
+    : 0
 
   return (
     <div className="space-y-6">
@@ -92,11 +90,11 @@ export async function IAContent({ range = "7d" }: { range?: string }) {
               </svg>
             </div>
           </div>
-          <p className="text-4xl font-bold text-blue-400 tabular-nums">{tiempoRespuesta}s</p>
+          <p className="text-4xl font-bold text-blue-400 tabular-nums">{tiempo_respuesta}s</p>
           <div className="mt-4 w-full bg-zinc-800 rounded-full h-2 overflow-hidden">
             <div 
               className="bg-gradient-to-r from-blue-500 to-cyan-400 h-2 rounded-full transition-all duration-1000" 
-              style={{ width: `${Math.min(tiempoRespuesta * 30, 100)}%` }} 
+              style={{ width: `${Math.min(tiempo_respuesta * 30, 100)}%` }} 
             />
           </div>
           <p className="text-xs text-zinc-500 mt-2">Tiempo de respuesta promedio</p>
