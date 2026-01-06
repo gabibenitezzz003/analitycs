@@ -17,12 +17,13 @@ function LoadingState({ text = "Cargando..." }: { text?: string }) {
   )
 }
 
-export default function DashboardPage({
+export default async function DashboardPage({
   searchParams,
 }: {
-  searchParams: { [key: string]: string | string[] | undefined }
+  searchParams: Promise<{ [key: string]: string | string[] | undefined }>
 }) {
-  const range = (searchParams.range as string) || "7d"
+  const resolvedParams = await searchParams
+  const range = (resolvedParams.range as string) || "7d"
 
   return (
     <Suspense fallback={<LoadingState text="Cargando dashboard..." />}>
