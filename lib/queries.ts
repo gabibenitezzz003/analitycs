@@ -206,6 +206,8 @@ export async function getAnalisisSentimiento(range: string = "7d") {
   }
 }
 
+
+
 export async function getTopRutas(limit = 5, range: string = "7d") {
   const supabase = await createClient()
   // Note: v_dashboard_rutas is an aggregated view. It usually contains LIFETIME stats unless filtered by update time?
@@ -214,24 +216,8 @@ export async function getTopRutas(limit = 5, range: string = "7d") {
   // Using v_dashboard_rutas directly might be misleading for short ranges if it holds lifetime data.
   // For proper filtering, let's query v_dashboard_interacciones and aggregate locally or assume the user wants "active routes in period"
   
-// Helper to get start date for functions that only need that
-export function getStartDate(range: string = "7d") {
-  return getDateRanges(range).current.start
-}
-
-export async function getMetricasDiarias(range: string = "7d") {
-  const supabase = await createClient()
+  
   const startDate = getStartDate(range)
-
-  const { data, error } = await supabase
-    .from("v_dashboard_overview")
-    .select("*")
-    .gte("fecha", startDate)
-    .order("fecha", { ascending: true })
-
-  if (error) throw error
-  return data || []
-}
   // Let's use v_dashboard_interacciones for accuracy
   const { data, error } = await supabase
     .from("v_dashboard_interacciones")

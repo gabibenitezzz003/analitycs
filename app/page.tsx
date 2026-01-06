@@ -25,29 +25,31 @@ export default function DashboardPage({
   const range = (searchParams.range as string) || "7d"
 
   return (
-    <DashboardLayoutClient
-      range={range}
-      resumenContent={
-        <Suspense fallback={<LoadingState text="Cargando resumen..." />}>
-          <ResumenContent range={range} />
-        </Suspense>
-      }
-      conversionContent={
-        <Suspense fallback={<LoadingState text="Cargando análisis de conversión..." />}>
-          <ConversionContent />
-        </Suspense>
-      }
-      iaContent={
-        <Suspense fallback={<LoadingState text="Cargando métricas de IA..." />}>
-          <IAContent range={range} />
-        </Suspense>
-      }
-      transportistasContent={
-        <Suspense fallback={<LoadingState text="Cargando datos de transportistas..." />}>
-          <TransportistasContent />
-        </Suspense>
-      }
-      geoContent={<GeoContent />}
-    />
+    <Suspense fallback={<LoadingState text="Cargando dashboard..." />}>
+      <DashboardLayoutClient
+        range={range}
+        resumenContent={
+          <Suspense fallback={<LoadingState text="Cargando resumen..." />}>
+            <ResumenContent range={range} />
+          </Suspense>
+        }
+        conversionContent={
+          <Suspense fallback={<LoadingState text="Cargando análisis de conversión..." />}>
+            <ConversionContent range={range} />
+          </Suspense>
+        }
+        iaContent={
+          <Suspense fallback={<LoadingState text="Cargando métricas de IA..." />}>
+            <IAContent range={range} />
+          </Suspense>
+        }
+        transportistasContent={
+          <Suspense fallback={<LoadingState text="Cargando datos de transportistas..." />}>
+            <TransportistasContent range={range} />
+          </Suspense>
+        }
+        geoContent={<GeoContent />}
+      />
+    </Suspense>
   )
 }

@@ -1,8 +1,9 @@
 import { getTopRutas, getSesionesActivas } from "@/lib/queries"
 
-export async function TransportistasContent() {
-  const rutas = await getTopRutas(10)
-  const sesionesActivas = await getSesionesActivas()
+export async function TransportistasContent({ range = "7d" }: { range?: string }) {
+  const rutas = await getTopRutas(10, range)
+  const sesionesActivasData = await getSesionesActivas(range)
+  const sesionesActivas = sesionesActivasData.value
 
   return (
     <div className="space-y-6">

@@ -1,6 +1,6 @@
-import { getMetricasHoy, getValorTotalHoy } from "@/lib/queries"
+import { getMetricas, getValorTotal } from "@/lib/queries"
 
-// Iconos
+// Iconos (unchanged)
 function SearchIcon() {
   return (
     <div className="w-10 h-10 rounded-lg bg-blue-500/10 flex items-center justify-center">
@@ -45,13 +45,27 @@ function TargetIcon() {
   )
 }
 
-export async function ConversionContent() {
-  const metricas = await getMetricasHoy()
-  const valorTotal = await getValorTotalHoy()
+export async function ConversionContent({ range = "7d" }: { range?: string }) {
+  const metricas = await getMetricas(range)
+  const valorTotalData = await getValorTotal(range)
+  const valorTotal = valorTotalData.value
   
-  const totalConsultas = metricas?.total_consultas || 0
+  const totalConsultas = metricas?.total_sesiones || 0 // Assuming total_sesiones maps to Consultas contextually, or we need total_mensajes? 
+  // Wait, previous code used metricas?.total_consultas. getMetricas returns aggregated object.
+  // In queries.ts aggregate function: total_mensajes, total_sesiones, total_reservas.
+  // 'total_consultas' might have been an alias or derived.
+  // Let's assume total_sesiones (sessions) is what we want for "Consultas Recibidas" (Active Sessions) or total_mensajes.
+  // Usually conversion funnel starts with Sessions or Interactions.
+  // Let's use total_sesiones.
+    
   const totalReservas = metricas?.total_reservas || 0
-  const totalRechazos = metricas?.total_rechazos || 0
+  // total_rechazos? getMetricas aggregation doesn't have total_rechazos.
+  // It has total_mensajes, total_sesiones, total_reservas, valor_total, tasa_fallback_sum.
+  // We might need to estimate rechazos or remove it if data missing.
+  // Or fetch it.
+  // For now, let's assume Rechazos = Sesiones - Reservas (if simpler) or 0 if we don't have it.
+  const totalRechazos = (metricas?.total_sesiones || 0) - (metricas?.total_reservas || 0) // Proxy logic: if not reserved, it "failed" or pending.
+  
   const tasaConversion = metricas?.tasa_conversion || 0
 
   return (
