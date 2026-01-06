@@ -47,7 +47,7 @@ export function DashboardLayoutClient({
               </div>
               <div>
                 <h1 className="text-3xl lg:text-4xl font-bold tracking-tight bg-gradient-to-r from-blue-400 to-cyan-400 bg-clip-text text-transparent">
-                  Motor de Negociación B.4.1
+                  Analytics B.4.1
                 </h1>
                 <p className="text-sm text-zinc-500 mt-1 font-medium">
                   Follow Hub · Dashboard Analítico en Tiempo Real
@@ -89,7 +89,7 @@ export function DashboardLayoutClient({
         {/* Footer */}
         <footer className="mt-12 pt-6 border-t border-zinc-800/50 no-print">
           <div className="flex flex-col sm:flex-row items-center justify-between gap-4 text-xs text-zinc-600">
-            <span>Follow Hub © 2026 · Motor de Negociación B.4.1</span>
+            <span>Follow Hub © 2026 · Analytics B.4.1</span>
             <span>Powered by Supabase · Real-time Analytics</span>
           </div>
         </footer>

@@ -11,7 +11,9 @@ export async function IAContent({ range = "7d" }: { range?: string }) {
   const tasaExito = 100 - tasaFallback
   const { tiempo_respuesta, extraccion, coherencia } = iaMetrics
   
-  const comprension = Math.min(100, Math.max(0, 100 - tasaFallback)) 
+  // Si no hay mensajes, la comprensión es 0 (no hay datos), no 100.
+  const hasData = metricas.total_mensajes > 0
+  const comprension = hasData ? Math.min(100, Math.max(0, 100 - tasaFallback)) : 0
 
   // Overall health - weighted average, zero if no metrics
   const healthScore = (comprension + extraccion + coherencia) > 0 
