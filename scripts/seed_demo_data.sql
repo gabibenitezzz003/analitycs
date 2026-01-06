@@ -1,144 +1,166 @@
--- SCRIPT DE MOCK DATA MASIVO E INTELIGENTE
--- Genera cientos de registros distribuidos para probar visualizaciones.
--- Ejecutar y disfrutar.
+-- SCRIPT DE MOCK DATA "ULTIMATE" (Versión Definitiva)
+-- Genera datos en TODAS las tablas necesarias para que el dashboard brille.
 
 DO $$
 DECLARE
     -- Configuración
-    v_total_transportistas INTEGER := 30;
-    v_total_sesiones INTEGER := 100;
+    v_total_transportistas INTEGER := 35;
+    v_total_sesiones INTEGER := 120;
     v_dias_atras INTEGER := 7;
     
-    -- Variables para iteradores
+    -- Iteradores y auxiliares
+    v_i INTEGER;
+    v_j INTEGER;
     v_t_id TEXT;
     v_s_id TEXT;
-    v_nombre TEXT;
-    v_apellido TEXT;
     v_fecha TIMESTAMP;
     v_base_fecha TIMESTAMP;
     v_intencion TEXT;
     v_accion TEXT;
     v_rand INTEGER;
-    v_tokens INTEGER;
-    v_tiempo INTEGER;
-    v_es_exito BOOLEAN;
     v_origen TEXT;
     v_destino TEXT;
-    v_i INTEGER; -- loop counter
-    v_j INTEGER; -- loop counter
+    v_valor NUMERIC;
+    v_estado_oferta TEXT;
+    
+    -- Acumuladores para métricas diarias
+    v_fecha_dia DATE;
+    v_total_mensajes INT;
+    v_total_sesiones_dia INT;
+    v_total_reservas INT;
+    v_valor_total NUMERIC;
+    v_tasa_fallback NUMERIC;
 BEGIN
-    -- 1. LIMPIEZA PREVIA (Opcional, comentar si se quiere acumular)
-    DELETE FROM public.b41_interacciones WHERE session_id LIKE 'mock_%';
-    DELETE FROM public.b41_sesiones WHERE session_id LIKE 'mock_%';
-    DELETE FROM public.b41_transportistas WHERE telefono LIKE '999%';
+    -- 1. LIMPIEZA TOTAL (Para evitar "basura" anterior)
+    -- Ajustar si el usuario prefiere no borrar, pero para demo es mejor limpiar.
+    TRUNCATE TABLE public.b41_interacciones CASCADE;
+    TRUNCATE TABLE public.b41_sesiones CASCADE;
+    TRUNCATE TABLE public.b41_transportistas CASCADE;
+    TRUNCATE TABLE public.b41_ofertas CASCADE; -- Tabla clave para Valor Total
+    TRUNCATE TABLE public.b41_metricas_diarias CASCADE; -- Tabla clave para Overview Cards
 
-    -- 2. GENERAR TRANSPORTISTAS (Drivers)
+    RAISE NOTICE 'Limpieza completada. Iniciando generación...';
+
+    -- 2. GENERAR TRANSPORTISTAS
     FOR v_i IN 1..v_total_transportistas LOOP
-        v_t_id := '999' || LPAD(v_i::TEXT, 8, '0'); -- Telefonos dummy 999...
+        v_t_id := '999' || LPAD(v_i::TEXT, 8, '0'); -- 99900000001
         
-        -- Nombre aleatorio
-        v_rand := floor(random() * 5 + 1);
-        v_nombre := CASE v_rand 
-            WHEN 1 THEN 'Juan' WHEN 2 THEN 'Carlos' WHEN 3 THEN 'Miguel' WHEN 4 THEN 'Roberto' ELSE 'Fernando' 
-        END;
-        
-        -- Apellido aleatorio
-        v_rand := floor(random() * 5 + 1);
-        v_apellido := CASE v_rand 
-            WHEN 1 THEN 'Perez' WHEN 2 THEN 'Gomez' WHEN 3 THEN 'Rodriguez' WHEN 4 THEN 'Lopez' ELSE 'Martinez' 
-        END;
-
         INSERT INTO public.b41_transportistas (telefono, nombre, apellido, created_at)
-        VALUES (v_t_id, v_nombre, v_apellido, NOW() - (random() * interval '30 days'))
-        ON CONFLICT (telefono) DO NOTHING;
+        VALUES (
+            v_t_id, 
+            (ARRAY['Juan','Carlos','Miguel','Roberto','Fernando','Luis','Diego','Pablo'])[floor(random()*8)+1], 
+            (ARRAY['Perez','Gomez','Rodriguez','Lopez','Martinez','Garcia','Sanchez','Fernandez'])[floor(random()*8)+1], 
+            NOW() - (random() * interval '30 days')
+        ) ON CONFLICT DO NOTHING;
     END LOOP;
 
-    -- 3. GENERAR SESIONES E INTERACCIONES
+    -- 3. GENERAR SESIONES, INTERACCIONES Y OFERTAS
     FOR v_i IN 1..v_total_sesiones LOOP
-        -- Elegir un transportista random
-        v_rand := floor(random() * v_total_transportistas + 1);
-        v_t_id := '999' || LPAD(v_rand::TEXT, 8, '0');
-        v_s_id := 'mock_sess_' || v_i;
+        -- Transportista Random
+        v_t_id := '999' || LPAD(floor(random() * v_total_transportistas + 1)::TEXT, 8, '0');
+        v_s_id := 'sess_' || v_i || '_' || md5(random()::text);
 
-        -- Fecha aleatoria en los últimos 7 días con horas pico (8am-8pm)
+        -- Fecha (distribución realista: más de día que de noche)
         v_base_fecha := NOW() - (floor(random() * v_dias_atras)::TEXT || ' days')::INTERVAL;
-        v_base_fecha := date_trunc('day', v_base_fecha) + (8 + floor(random() * 12)) * INTERVAL '1 hour' + (floor(random()*60) * INTERVAL '1 minute');
-
+        v_base_fecha := date_trunc('day', v_base_fecha) + (8 + floor(random() * 12)) * INTERVAL '1 hour';
+        
         INSERT INTO public.b41_sesiones (session_id, telefono, inicio, created_at)
-        VALUES (v_s_id, v_t_id, v_base_fecha, v_base_fecha)
-        ON CONFLICT (session_id) DO NOTHING;
+        VALUES (v_s_id, v_t_id, v_base_fecha, v_base_fecha);
 
-        -- Generar 3-6 interacciones por sesión
-        FOR v_j IN 1..(floor(random() * 4 + 3)) LOOP
-            v_fecha := v_base_fecha + (v_j * INTERVAL '2 minutes');
-            
-            -- Lógica Clave: Definir historias por probabilidad
+        -- Generar Interacciones por sesión
+        FOR v_j IN 1..(floor(random() * 5 + 2)) LOOP
+            v_fecha := v_base_fecha + (v_j * INTERVAL '3 minutes');
             v_rand := floor(random() * 100);
-            
-            IF v_rand < 40 THEN
-                -- 40% Cotizaciones (Mix de rutas)
+            v_valor := 0; 
+            v_estado_oferta := NULL;
+
+            -- Lógica de negocio simulada
+            IF v_rand < 40 THEN -- Cotizar (40%)
                 v_intencion := 'cotizar'; v_accion := 'COTIZAR';
-                v_tokens := 150 + floor(random() * 100);
-                v_tiempo := 1500 + floor(random() * 2000);
-                v_es_exito := false;
-                
-                -- Rutas Hot (Buenos Aires -> Interior)
-                IF random() < 0.6 THEN
-                    v_origen := 'Buenos Aires';
-                    v_destino := CASE floor(random() * 3) 
-                        WHEN 0 THEN 'Rosario' WHEN 1 THEN 'Córdoba' ELSE 'Mendoza' END;
-                ELSE
-                     v_origen := CASE floor(random() * 3) 
-                        WHEN 0 THEN 'Bahía Blanca' WHEN 1 THEN 'Santa Fe' ELSE 'Neuquén' END;
-                     v_destino := 'Buenos Aires';
+                v_origen := (ARRAY['Buenos Aires','Rosario','Córdoba','Mendoza'])[floor(random()*4)+1];
+                v_destino := (ARRAY['Tucumán','Neuquén','Bahía Blanca','Mar del Plata'])[floor(random()*4)+1];
+            ELSIF v_rand < 65 THEN -- Reservar (25% - Éxito!)
+                v_intencion := 'reservar'; v_accion := 'RESERVAR';
+                v_origen := 'Buenos Aires'; 
+                v_destino := (ARRAY['Rosario','Córdoba'])[floor(random()*2)+1];
+                v_valor := 500000 + floor(random() * 1000000); -- $500k a $1.5M
+                v_estado_oferta := 'ACEPTADA';
+            ELSIF v_rand < 80 THEN -- Negociar (15%)
+                v_intencion := 'negociar'; v_accion := 'NEGOCIAR';
+                v_origen := 'Buenos Aires'; v_destino := 'Córdoba';
+                v_estado_oferta := 'EN_NEGOCIACION';
+                v_valor := 800000;
+            ELSE -- Conversación / Fallback (20%)
+                IF random() < 0.3 THEN 
+                   v_intencion := 'fallback'; v_accion := 'FALLBACK';
+                ELSE 
+                   v_intencion := 'conversacion'; v_accion := 'CONVERSACION';
                 END IF;
-
-            ELSIF v_rand < 60 THEN
-                 -- 20% Negociaciones (Algunas terminan en rechazo)
-                 v_intencion := 'negociar'; v_accion := 'NEGOCIAR';
-                 v_tokens := 200 + floor(random() * 100);
-                 v_tiempo := 2000 + floor(random() * 1500);
-                 v_origen := 'Buenos Aires'; v_destino := 'Tucumán';
-                 v_es_exito := false;
-
-            ELSIF v_rand < 80 THEN
-                 -- 20% Reservas (Exito!)
-                 v_intencion := 'reservar'; v_accion := 'RESERVAR';
-                 v_tokens := 300 + floor(random() * 100);
-                 v_tiempo := 1200 + floor(random() * 1000);
-                 v_origen := 'Buenos Aires'; v_destino := 'Córdoba';
-                 v_es_exito := true;
-
-            ELSE
-                 -- 20% Otros (Conversacion, Fallback)
-                 IF random() < 0.5 THEN
-                    v_intencion := 'conversacion'; v_accion := 'CONVERSACION';
-                 ELSE
-                    v_intencion := 'fallback'; v_accion := 'FALLBACK';
-                 END IF;
-                 v_tokens := 100; v_tiempo := 800;
-                 v_origen := NULL; v_destino := NULL;
-                 v_es_exito := false;
+                v_origen := NULL; v_destino := NULL;
             END IF;
 
             -- Insertar Interacción
             INSERT INTO public.b41_interacciones (
                 session_id, telefono, mensaje_usuario, respuesta_ia, 
                 intencion, accion, tiempo_respuesta_ms, tokens_usados, 
-                origen, destino, created_at, 
-                es_repetitivo, es_rechazo, es_exito
-            )
-            VALUES (
+                origen, destino, created_at, es_repetitivo, es_rechazo, es_exito
+            ) VALUES (
                 v_s_id, v_t_id, 
-                'Mensaje simulado ' || v_j, 
-                'Respuesta simulada ' || v_j, 
+                'Simulación ' || v_j, 'Respuesta IA', 
                 v_intencion, v_accion, 
-                v_tiempo, v_tokens, 
+                1000 + floor(random() * 2000), 
+                100 + floor(random() * 300), 
                 v_origen, v_destino, v_fecha,
-                (random() < 0.05), -- 5% chance es repetitivo
-                (v_intencion = 'negociar' AND random() < 0.3), -- 30% negociaciones se rechazan
-                v_es_exito
+                (v_intencion = 'conversacion' AND random() < 0.2), -- Fricción simulada
+                false, 
+                (v_intencion = 'reservar')
             );
+
+            -- CRÍTICO: Si es Reserva o Negociación, crear OFERTA para que el gráfico de Valor ($) funcione
+            IF v_estado_oferta IS NOT NULL THEN
+                INSERT INTO public.b41_ofertas (
+                    telefono_destino, valor_final, estado, created_at, session_id
+                ) VALUES (
+                    v_t_id, v_valor, v_estado_oferta, v_fecha, v_s_id
+                );
+            END IF;
+
         END LOOP;
     END LOOP;
+
+    -- 4. POBLAR B41_METRICAS_DIARIAS (Crucial para Overview Cards)
+    -- Agrupamos lo que acabamos de generar y lo insertamos en la tabla resumen
+    INSERT INTO public.b41_metricas_diarias (
+        fecha, total_mensajes, total_sesiones, total_conversaciones, 
+        total_usuarios, valor_total, total_consultas, total_reservas, created_at
+    )
+    SELECT 
+        date_trunc('day', created_at) as dia,
+        COUNT(*) as msjs,
+        COUNT(DISTINCT session_id) as ses,
+        COUNT(*) FILTER (WHERE intencion = 'conversacion') as convs,
+        COUNT(DISTINCT telefono) as usrs,
+        0, -- El valor total se calcula diferente (desde ofertas), pero ponemos 0 por ahora o sumamos si tuviéramos columna
+        COUNT(*) FILTER (WHERE intencion = 'cotizar' OR intencion = 'consultar'),
+        COUNT(*) FILTER (WHERE intencion = 'reservar'),
+        NOW()
+    FROM public.b41_interacciones
+    GROUP BY 1
+    ON CONFLICT (fecha) DO UPDATE SET 
+        total_mensajes = EXCLUDED.total_mensajes,
+        total_sesiones = EXCLUDED.total_sesiones,
+        total_reservas = EXCLUDED.total_reservas;
+    
+    -- Actualizar Valor Total en Metricas Diarias desde Ofertas
+    UPDATE public.b41_metricas_diarias m
+    SET valor_total = sub.suma
+    FROM (
+        SELECT date_trunc('day', created_at) as dia, SUM(valor_final) as suma
+        FROM public.b41_ofertas
+        WHERE estado = 'ACEPTADA'
+        GROUP BY 1
+    ) sub
+    WHERE m.fecha = sub.dia;
+
+    RAISE NOTICE 'Generación masiva completada exitosamente.';
 END $$;

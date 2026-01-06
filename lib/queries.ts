@@ -521,4 +521,4 @@ export async function getAdvancedIAMetrics(range: string = "7d") {
      return { friccion: 0, total_tokens: 0 }
    }
 }
-}
+
