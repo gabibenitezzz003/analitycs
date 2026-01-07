@@ -1,4 +1,4 @@
--- SCRIPT DE DATOS REALISTAS V2 (Corrección Final - Esquema Completo + Latencia Real)
+-- SCRIPT DE DATOS REALISTAS V2.1 (Corrección: Distribución Geográfica LATAM)
 -- Ejecutar en Supabase SQL Editor
 
 -- 1. ACTUALIZAR ESQUEMA (Transportistas y Métricas)
@@ -71,6 +71,20 @@ DECLARE
     rnd_hour INT;
     rnd_min INT;
     ts TIMESTAMP;
+    
+    routes TEXT[][] := ARRAY[
+       ['Buenos Aires', 'Córdoba'],
+       ['Mendoza', 'Santiago'], -- Cruce a Chile
+       ['Buenos Aires', 'Montevideo'], -- Cruce a Uruguay
+       ['Rosario', 'São Paulo'], -- Cruce a Brasil a larga distancia
+       ['Córdoba', 'Tucumán'],
+       ['Salta', 'La Paz'], -- Cruce a Bolivia
+       ['Buenos Aires', 'Rosario'],
+       ['Asunción', 'Formosa'], -- Frontera
+       ['Buenos Aires', 'Mar del Plata'],
+       ['Lima', 'Santiago'] -- Ruta Pacífico
+    ];
+    selected_route TEXT[];
 BEGIN
     curr_date := start_date;
     
@@ -110,18 +124,21 @@ BEGIN
             rnd_min := floor(random() * 60);
             ts := curr_date + make_interval(hours := rnd_hour, mins := rnd_min);
             
+            -- Pick a Random Route
+            selected_route := routes[1 + floor(random() * array_length(routes, 1))];
+            
             INSERT INTO public.b41_sesiones (session_id, telefono, inicio, created_at) 
             VALUES (session_uuid, rnd_driver, ts, ts) ON CONFLICT DO NOTHING;
             
-            -- Interacción 1: Consulta (Con latencia IA realista ~22s)
+            -- Interacción 1: Consulta
             INSERT INTO public.b41_interacciones (
                 session_id, telefono, mensaje_usuario, respuesta_ia, intencion, accion, 
                 tiempo_respuesta_ms, tokens_usados, origen, destino, created_at, es_exito
             ) VALUES
-            (session_uuid, rnd_driver, 'Hola, hay viaje?', 'Tengo cargas disponibles.', 'consultar', 'CONSULTAR', 
-             22000 + floor(random() * 10000), 100, NULL, NULL, ts + INTERVAL '25 seconds', true);
+            (session_uuid, rnd_driver, 'Hola, hay viaje?', 'Tengo cargas disponibles de ' || selected_route[1] || ' a ' || selected_route[2], 'consultar', 'CONSULTAR', 
+             22000 + floor(random() * 10000), 100, selected_route[1], selected_route[2], ts + INTERVAL '25 seconds', true);
              
-             -- 15% Probabilidad de FALLO / ERROR IA
+             -- 15% Probabilidad de FALLO
              IF random() < 0.15 THEN
                  INSERT INTO public.b41_interacciones (
                     session_id, telefono, mensaje_usuario, respuesta_ia, intencion, accion, 
@@ -130,14 +147,14 @@ BEGIN
                 (session_uuid, rnd_driver, 'kdsjf kdsjf', 'Disculpa, no entendí tu mensaje.', 'fallback', 'FALLBACK', 
                  25000 + floor(random() * 5000), 50, NULL, NULL, ts + INTERVAL '2 minutes', false);
              
-             -- Si no falla, probar Reserva
+             -- Si no falla, probar Reserva con la ruta seleccionada
              ELSIF i <= daily_reserves THEN
                 INSERT INTO public.b41_interacciones (
                     session_id, telefono, mensaje_usuario, respuesta_ia, intencion, accion, 
                     tiempo_respuesta_ms, tokens_usados, origen, destino, created_at, es_exito
                 ) VALUES 
                 (session_uuid, rnd_driver, 'Reservar viaje', 'Reservado #B41-' || floor(random()*9999), 'reservar', 'RESERVAR', 
-                 23000 + floor(random() * 5000), 200, 'Buenos Aires', 'Córdoba', ts + INTERVAL '1 minute', true);
+                 23000 + floor(random() * 5000), 200, selected_route[1], selected_route[2], ts + INTERVAL '1 minute', true);
              END IF;
         END LOOP;
         

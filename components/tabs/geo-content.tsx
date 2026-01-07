@@ -4,8 +4,9 @@ import { useEffect, useRef, useState } from "react"
 import { TransportistaDetailPanel } from "@/components/TransportistaDetailPanel"
 import { cn } from "@/lib/utils"
 
-// Coordinate dictionary
-const CIUDADES_ARGENTINA: Record<string, [number, number]> = {
+// Coordinate dictionary (Expanded LATAM)
+const CIUDADES_LATAM: Record<string, [number, number]> = {
+  // Argentina
   "Buenos Aires": [-34.6037, -58.3816],
   "Córdoba": [-31.4201, -64.1888],
   "Rosario": [-32.9468, -60.6393],
@@ -16,6 +17,16 @@ const CIUDADES_ARGENTINA: Record<string, [number, number]> = {
   "San Juan": [-31.5375, -68.5364],
   "Neuquén": [-38.9516, -68.0591],
   "Bahía Blanca": [-38.7196, -62.2724],
+  
+  // Internacionales
+  "Montevideo": [-34.9011, -56.1645], // Uruguay
+  "Santiago": [-33.4489, -70.6693],   // Chile
+  "São Paulo": [-23.5505, -46.6333],  // Brasil
+  "Rio de Janeiro": [-22.9068, -43.1729], // Brasil
+  "Asunción": [-25.2637, -57.5759],   // Paraguay
+  "La Paz": [-16.5000, -68.1500],     // Bolivia
+  "Lima": [-12.0464, -77.0428],       // Perú
+  "Bogotá": [4.7110, -74.0721],       // Colombia
 }
 
 declare global {
@@ -32,6 +43,7 @@ export function GeoContent() {
   const [cargasRecomendadas, setCargasRecomendadas] = useState<any[]>([])
   const [isLoading, setIsLoading] = useState(true)
   const [radioCircle, setRadioCircle] = useState<any>(null)
+  const [routeLines, setRouteLines] = useState<any[]>([])
   const [searchTerm, setSearchTerm] = useState("")
 
   // Load Data
@@ -75,14 +87,14 @@ export function GeoContent() {
       }).addTo(map)
 
       // Add Cities
-      Object.entries(CIUDADES_ARGENTINA).forEach(([ciudad, coords]) => {
+      Object.entries(CIUDADES_LATAM).forEach(([ciudad, coords]) => {
         L.circleMarker(coords as [number, number], {
-          radius: 4,
+          radius: 3,
           fillColor: "#3b82f6",
           color: "#1e40af",
           weight: 1,
-          opacity: 0.8,
-          fillOpacity: 0.8,
+          opacity: 0.6,
+          fillOpacity: 0.6,
         }).addTo(map)
       })
     }
@@ -99,11 +111,11 @@ export function GeoContent() {
   useEffect(() => {
     if (!mapInstanceRef.current || !window.L || transportistas.length === 0) return
     
-    // Clear existing layers if needed (implementation simplified for add-only)
-    // Real implementation should track marker layers to clear them on updates if needed
-
     const L = window.L
     const map = mapInstanceRef.current
+
+    // Clear previous markers if we implemented a clear logic, but for now we append. 
+    // In a real app we'd manage a LayerGroup.
 
     transportistas.forEach((t) => {
       if (!t.centroide) return
@@ -130,19 +142,44 @@ export function GeoContent() {
 
     // Map interactions
     if (mapInstanceRef.current && window.L) {
-      if (radioCircle) mapInstanceRef.current.removeLayer(radioCircle)
-      
       const L = window.L
+      const map = mapInstanceRef.current
+
+      // Clear previous overlays
+      if (radioCircle) map.removeLayer(radioCircle)
+      routeLines.forEach(line => map.removeLayer(line))
+      
+      const newLines: any[] = []
+
+      // 1. Draw Routes (Dotted Lines)
+      transportista.topRutas.forEach((rutaObj: any) => {
+          const [origen, destino] = rutaObj.ruta.split(' → ')
+          const c1 = CIUDADES_LATAM[origen]
+          const c2 = CIUDADES_LATAM[destino]
+
+          if (c1 && c2) {
+             const line = L.polyline([c1, c2], {
+                 color: '#3b82f6',
+                 weight: 2,
+                 dashArray: '5, 10',
+                 opacity: 0.6
+             }).addTo(map)
+             newLines.push(line)
+          }
+      })
+      setRouteLines(newLines)
+
+      // 2. Draw Radius Circle
       const circle = L.circle([transportista.centroide.lat, transportista.centroide.lng], {
-        radius: transportista.radioAccion * 1000,
+        radius: (transportista.radioAccion || 500) * 1000,
         color: '#10b981',
-        fillOpacity: 0.05,
+        fillOpacity: 0.1,
         weight: 1,
         dashArray: '5, 5'
-      }).addTo(mapInstanceRef.current)
+      }).addTo(map)
       setRadioCircle(circle)
       
-      mapInstanceRef.current.flyTo([transportista.centroide.lat, transportista.centroide.lng], 7, { duration: 1.5 })
+      map.flyTo([transportista.centroide.lat, transportista.centroide.lng], 6, { duration: 1.5 })
     }
   }
 
@@ -210,6 +247,7 @@ export function GeoContent() {
                     onClose={() => {
                         setSelectedTransportista(null)
                         if (radioCircle && mapInstanceRef.current) mapInstanceRef.current.removeLayer(radioCircle)
+                        if (routeLines.length && mapInstanceRef.current) routeLines.forEach(l => mapInstanceRef.current?.removeLayer(l))
                         if (mapInstanceRef.current) mapInstanceRef.current.flyTo([-34.6037, -58.3816], 5)
                     }}
                 />

@@ -523,11 +523,12 @@ export async function getAdvancedIAMetrics(range: string = "7d") {
 }
 
 // ============================================================================
-// ANÁLISIS GEOGRÁFICO DE TRANSPORTISTAS
+// ANÁLISIS GEOGRÁFICO DE TRANSPORTISTAS (LATAM)
 // ============================================================================
 
-// Coordenadas de ciudades argentinas
-export const CIUDADES_ARGENTINA: Record<string, [number, number]> = {
+// Coordenadas de ciudades LATAM
+export const CIUDADES_LATAM: Record<string, [number, number]> = {
+  // Argentina
   "Buenos Aires": [-34.6037, -58.3816],
   "Córdoba": [-31.4201, -64.1888],
   "Rosario": [-32.9468, -60.6393],
@@ -538,6 +539,16 @@ export const CIUDADES_ARGENTINA: Record<string, [number, number]> = {
   "San Juan": [-31.5375, -68.5364],
   "Neuquén": [-38.9516, -68.0591],
   "Bahía Blanca": [-38.7196, -62.2724],
+  
+  // Internacionales
+  "Montevideo": [-34.9011, -56.1645], // Uruguay
+  "Santiago": [-33.4489, -70.6693],   // Chile
+  "São Paulo": [-23.5505, -46.6333],  // Brasil
+  "Rio de Janeiro": [-22.9068, -43.1729], // Brasil
+  "Asunción": [-25.2637, -57.5759],   // Paraguay
+  "La Paz": [-16.5000, -68.1500],     // Bolivia
+  "Lima": [-12.0464, -77.0428],       // Perú
+  "Bogotá": [4.7110, -74.0721],       // Colombia
 }
 
 // Calcular distancia entre dos puntos (fórmula de Haversine)
@@ -592,7 +603,7 @@ export async function getTransportistasGeoData() {
         // Calcular centroide (promedio ponderado)
         let sumLat = 0, sumLng = 0, sumPesos = 0
         Object.entries(ubicacionesFrecuencia).forEach(([ciudad, freq]) => {
-          const coords = CIUDADES_ARGENTINA[ciudad]
+          const coords = CIUDADES_LATAM[ciudad]
           if (coords) {
             sumLat += coords[0] * freq
             sumLng += coords[1] * freq
@@ -607,10 +618,10 @@ export async function getTransportistasGeoData() {
 
         if (!centroide) return null
 
-        // Calcular radio de acción (distancia máxima desde centroide)
+    // Calcular radio de acción (distancia máxima desde centroide)
         let radioMax = 0
         Object.keys(ubicacionesFrecuencia).forEach(ciudad => {
-          const coords = CIUDADES_ARGENTINA[ciudad]
+          const coords = CIUDADES_LATAM[ciudad]
           if (coords) {
             const dist = distanciaHaversine(centroide.lat, centroide.lng, coords[0], coords[1])
             if (dist > radioMax) radioMax = dist
@@ -716,8 +727,8 @@ export async function getRecomendacionesCargas(
   if (!transportista.centroide) return []
 
   const recomendaciones = cargas.map(carga => {
-    const origenCoords = CIUDADES_ARGENTINA[carga.origen]
-    const destinoCoords = CIUDADES_ARGENTINA[carga.destino]
+    const origenCoords = CIUDADES_LATAM[carga.origen]
+    const destinoCoords = CIUDADES_LATAM[carga.destino]
     
     if (!origenCoords || !destinoCoords) return null
 
