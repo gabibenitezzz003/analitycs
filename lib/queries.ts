@@ -487,9 +487,40 @@ export async function getDrillDownDetails(type: 'date' | 'intention', value: str
 export async function getFallbacks() {
   try {
     const supabase = await createClient()
-    const { data } = await supabase.from("v_dashboard_fallbacks").select("*")
-    return data || []
+    const { data } = await supabase
+        .from("b41_interacciones")
+        .select("mensaje_usuario, respuesta_ia, created_at")
+        .eq("es_exito", false)
+        .order("created_at", { ascending: false })
+        .limit(100)
+
+    if (!data || data.length === 0) return []
+
+    // Agregación simulada de causas (ya que no tenemos una columna 'motivo_error' estructurada aun en la DB)
+    // En produccion esto vendria de un clasificador de errores.
+    const motivos = data.map(d => {
+        const msg = d.mensaje_usuario.toLowerCase() || ""
+        if (msg.includes("precio") || msg.includes("caro")) return "Disconformidad Precio"
+        if (msg.includes("ruta") || msg.includes("destino")) return "Ruta No Cubierta"
+        if (msg.includes("horario") || msg.includes("tiempo")) return "Horario Incompatible"
+        if (msg.length < 5) return "Mensaje Incoherente/Corto"
+        return "Intención No Clara"
+    })
+
+    const counts: Record<string, number> = {}
+    motivos.forEach(m => counts[m] = (counts[m] || 0) + 1)
+    const total = motivos.length
+
+    return Object.entries(counts)
+        .map(([motivo, cantidad]) => ({
+            motivo_fallback: motivo,
+            cantidad,
+            porcentaje: Math.round((cantidad / total) * 100)
+        }))
+        .sort((a, b) => b.cantidad - a.cantidad)
+
   } catch (err) {
+    console.error("Error in getFallbacks Pareto:", err)
     return []
   }
 }

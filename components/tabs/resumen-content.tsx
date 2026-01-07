@@ -39,7 +39,10 @@ export async function ResumenContent({ range }: { range: string }) {
         />
         <KPICard
           title="Valor Total Procesado"
-          value={`$${(metricas.valor_total / 1000000).toFixed(1)}M`}
+          value={metricas.valor_total > 1000000 
+            ? `$${(metricas.valor_total / 1000000).toFixed(1)}M`
+            : `$${(metricas.valor_total / 1000).toFixed(0)}k`
+          }
           trend={{ value: metricas.trends.valor_total, label: "vs periodo anterior" }}
           icon={DollarIcon}
           color="amber"
