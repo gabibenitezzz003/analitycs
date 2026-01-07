@@ -756,3 +756,55 @@ export async function getRecomendacionesCargas(
     .slice(0, 5)
 }
 
+// ============================================================================
+// CONVERSION FUNNEL DATA
+// ============================================================================
+
+export async function getConversion(range: string = "7d") {
+  try {
+    const supabase = await createClient()
+    const dates = getDateRanges(range)
+    const currentStart = dates.current.start
+    const currentEnd = dates.current.end
+    
+    // Get conversion metrics from view
+    const { data, error } = await supabase
+      .from('v_dashboard_conversion')
+      .select('*')
+      .gte('fecha', currentStart)
+      .lte('fecha', currentEnd)
+      .single()
+    
+    if (error) {
+      // Fallback: calculate from b41_interacciones
+      const { data: interacciones } = await supabase
+        .from('b41_interacciones')
+        .select('intencion, es_exito, es_rechazo')
+        .gte('created_at', currentStart)
+        .lte('created_at', currentEnd)
+      
+      const { data: ofertas } = await supabase
+        .from('b41_ofertas')
+        .select('valor_final')
+        .eq('estado', 'ACEPTADA')
+        .gte('created_at', currentStart)
+        .lte('created_at', currentEnd)
+      
+      const consultas = interacciones?.filter(i => 
+        ['cotizar', 'consultar', 'buscar'].includes(i.intencion?.toLowerCase() || '')
+      ).length || 0
+      
+      const reservas = interacciones?.filter(i => i.es_exito).length || 0
+      const rechazos = interacciones?.filter(i => i.es_rechazo).length || 0
+      const valor_total = ofertas?.reduce((sum, o) => sum + (o.valor_final || 0), 0) || 0
+      
+      return { consultas, reservas, rechazos, valor_total }
+    }
+    
+    return data || { consultas: 0, reservas: 0, rechazos: 0, valor_total: 0 }
+  } catch (error) {
+    console.error("Error in getConversion:", error)
+    return { consultas: 0, reservas: 0, rechazos: 0, valor_total: 0 }
+  }
+}
+

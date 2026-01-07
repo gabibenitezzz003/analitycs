@@ -1,4 +1,8 @@
-import { getMetricas, getValorTotal } from "@/lib/queries"
+"use client"
+
+import { useState, useEffect, useMemo } from "react"
+import { EditableCell, ReadOnlyCell } from "@/components/editable-cell"
+import { getConversionData } from "@/app/actions/conversion-actions"
 
 // Iconos compactos
 function SearchIcon() {
@@ -45,105 +49,203 @@ function TargetIcon() {
   )
 }
 
-export async function ConversionContent({ range = "7d" }: { range?: string }) {
-  const metricas = await getMetricas(range).catch(() => ({ 
-    total_mensajes: 0, total_sesiones: 0, total_reservas: 0, valor_total: 0, tasa_conversion: 0 
-  }))
-  const valorTotalData = await getValorTotal(range).catch(() => ({ value: 0, trend: 0 }))
-  const valorTotal = valorTotalData.value
-  
-  const totalConsultas = metricas?.total_sesiones || 0
-  const totalReservas = metricas?.total_reservas || 0
-  const totalRechazos = Math.max(0, totalConsultas - totalReservas)
-  const tasaConversion = metricas?.tasa_conversion || 0
+interface ConversionData {
+  consultas: number
+  reservas: number
+  rechazos: number
+  valorTotal: number
+}
 
-  // Datos del funnel para tabla Excel-style
+interface ComputedMetrics {
+  consultasPercent: number
+  reservasPercent: number
+  rechazosPercent: number
+  tasaReserva: number
+  tasaRechazo: number
+  valorPromReserva: number
+  eficienciaFunnel: number
+  statusFunnel: 'Excelente' | 'Buena' | 'Regular' | 'Crítica'
+  statusColor: string
+}
+
+function recalcularTodo(data: ConversionData): ComputedMetrics {
+  const { consultas, reservas, rechazos, valorTotal } = data
+  
+  const totalInteracciones = consultas || 1 // Evitar división por cero
+  
+  const consultasPercent = (consultas / totalInteracciones) * 100
+  const reservasPercent = (reservas / totalInteracciones) * 100
+  const rechazosPercent = (rechazos / totalInteracciones) * 100
+  
+  const tasaReserva = consultas > 0 ? (reservas / consultas) * 100 : 0
+  const tasaRechazo = consultas > 0 ? (rechazos / consultas) * 100 : 0
+  
+  const valorPromReserva = reservas > 0 ? valorTotal / reservas : 0
+  const eficienciaFunnel = tasaReserva
+  
+  let statusFunnel: 'Excelente' | 'Buena' | 'Regular' | 'Crítica'
+  let statusColor: string
+  
+  if (tasaReserva >= 40) {
+    statusFunnel = 'Excelente'
+    statusColor = 'text-emerald-400'
+  } else if (tasaReserva >= 30) {
+    statusFunnel = 'Buena'
+    statusColor = 'text-blue-400'
+  } else if (tasaReserva >= 20) {
+    statusFunnel = 'Regular'
+    statusColor = 'text-amber-400'
+  } else {
+    statusFunnel = 'Crítica'
+    statusColor = 'text-red-400'
+  }
+  
+  return {
+    consultasPercent,
+    reservasPercent,
+    rechazosPercent,
+    tasaReserva,
+    tasaRechazo,
+    valorPromReserva,
+    eficienciaFunnel,
+    statusFunnel,
+    statusColor
+  }
+}
+
+export function ConversionContent({ range = "7d" }: { range?: string }) {
+  const [data, setData] = useState<ConversionData>({
+    consultas: 0,
+    reservas: 0,
+    rechazos: 0,
+    valorTotal: 0
+  })
+  const [isLoading, setIsLoading] = useState(true)
+
+  useEffect(() => {
+    async function loadInitialData() {
+      setIsLoading(true)
+      const initial = await getConversionData(range)
+      setData(initial)
+      setIsLoading(false)
+    }
+    loadInitialData()
+  }, [range])
+
+  const computed = useMemo(() => recalcularTodo(data), [data])
+
+  const handleCellChange = (field: keyof ConversionData, value: number) => {
+    setData(prev => ({ ...prev, [field]: value }))
+  }
+
   const funnelData = [
     { 
-      etapa: "Consultas Recibidas", 
-      cantidad: totalConsultas, 
-      porcentaje: 100, 
+      etapa: 'Consultas Recibidas', 
+      cantidad: data.consultas, 
+      porcentaje: computed.consultasPercent,
       conversion: 100,
-      color: "blue",
-      icon: "search"
+      color: 'blue',
+      icon: <SearchIcon />
     },
     { 
-      etapa: "Reservas Confirmadas", 
-      cantidad: totalReservas, 
-      porcentaje: totalConsultas > 0 ? (totalReservas / totalConsultas) * 100 : 0,
-      conversion: tasaConversion,
-      color: "emerald",
-      icon: "check"
+      etapa: 'Reservas Confirmadas', 
+      cantidad: data.reservas, 
+      porcentaje: computed.reservasPercent,
+      conversion: computed.tasaReserva,
+      color: 'emerald',
+      icon: <CheckIcon />
     },
     { 
-      etapa: "Rechazos", 
-      cantidad: totalRechazos, 
-      porcentaje: totalConsultas > 0 ? (totalRechazos / totalConsultas) * 100 : 0,
-      conversion: 100 - tasaConversion,
-      color: "red",
-      icon: "x"
+      etapa: 'Rechazos', 
+      cantidad: data.rechazos, 
+      porcentaje: computed.rechazosPercent,
+      conversion: computed.tasaRechazo,
+      color: 'red',
+      icon: <XIcon />
     },
   ]
 
+  if (isLoading) {
+    return (
+      <div className="flex items-center justify-center h-64">
+        <div className="text-zinc-500">Cargando datos...</div>
+      </div>
+    )
+  }
+
   return (
     <div className="space-y-6">
-      {/* Header */}
-      <div className="flex items-center gap-3 mb-6">
-        <div className="w-12 h-12 rounded-xl bg-gradient-to-br from-amber-500 to-orange-500 flex items-center justify-center">
-          <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="2">
-            <polygon points="22 3 2 3 10 12.46 10 19 14 21 14 12.46 22 3" />
-          </svg>
-        </div>
-        <div>
-          <h2 className="text-xl font-bold text-white">Análisis Conversión</h2>
-          <p className="text-sm text-zinc-500">Funnel de ventas y métricas de conversión</p>
+      {/* Header con instrucción */}
+      <div className="flex items-center gap-3">
+        <TargetIcon />
+        <div className="flex-1">
+          <h2 className="text-xl font-bold text-white">Análisis de Conversión</h2>
+          <p className="text-sm text-zinc-500">Haz click en cualquier número para editarlo en tiempo real</p>
         </div>
       </div>
 
-      {/* KPIs Mini Grid */}
-      <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
+      {/* KPIs Editables Compactos */}
+      <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
         <div className="bg-[#0a0a0a] border border-white/[0.06] rounded-xl p-4">
-          <div className="flex items-center justify-between">
-            <div>
-              <p className="text-xs font-semibold text-zinc-500 uppercase">Consultas</p>
-              <p className="text-2xl font-bold text-blue-400 mt-1 tabular-nums">{totalConsultas}</p>
-            </div>
+          <div className="flex items-center justify-between mb-2">
+            <span className="text-sm text-zinc-400">CONSULTAS</span>
             <SearchIcon />
           </div>
+          <EditableCell
+            value={data.consultas}
+            onChange={(v) => handleCellChange('consultas', v)}
+            format="number"
+            min={0}
+            max={10000}
+            className="text-2xl text-blue-400"
+          />
         </div>
 
         <div className="bg-[#0a0a0a] border border-white/[0.06] rounded-xl p-4">
-          <div className="flex items-center justify-between">
-            <div>
-              <p className="text-xs font-semibold text-zinc-500 uppercase">Reservas</p>
-              <p className="text-2xl font-bold text-emerald-400 mt-1 tabular-nums">{totalReservas}</p>
-            </div>
+          <div className="flex items-center justify-between mb-2">
+            <span className="text-sm text-zinc-400">RESERVAS</span>
             <CheckIcon />
           </div>
+          <EditableCell
+            value={data.reservas}
+            onChange={(v) => handleCellChange('reservas', Math.min(v, data.consultas))}
+            format="number"
+            min={0}
+            max={data.consultas}
+            className="text-2xl text-emerald-400"
+          />
         </div>
 
         <div className="bg-[#0a0a0a] border border-white/[0.06] rounded-xl p-4">
-          <div className="flex items-center justify-between">
-            <div>
-              <p className="text-xs font-semibold text-zinc-500 uppercase">Rechazos</p>
-              <p className="text-2xl font-bold text-red-400 mt-1 tabular-nums">{totalRechazos}</p>
-            </div>
+          <div className="flex items-center justify-between mb-2">
+            <span className="text-sm text-zinc-400">RECHAZOS</span>
             <XIcon />
           </div>
+          <EditableCell
+            value={data.rechazos}
+            onChange={(v) => handleCellChange('rechazos', Math.min(v, data.consultas))}
+            format="number"
+            min={0}
+            max={data.consultas}
+            className="text-2xl text-red-400"
+          />
         </div>
 
         <div className="bg-[#0a0a0a] border border-white/[0.06] rounded-xl p-4">
-          <div className="flex items-center justify-between">
-            <div>
-              <p className="text-xs font-semibold text-zinc-500 uppercase">Conversión</p>
-              <p className="text-2xl font-bold text-amber-400 mt-1 tabular-nums">{tasaConversion.toFixed(1)}%</p>
-            </div>
+          <div className="flex items-center justify-between mb-2">
+            <span className="text-sm text-zinc-400">CONVERSIÓN</span>
             <TargetIcon />
           </div>
+          <ReadOnlyCell
+            value={computed.tasaReserva}
+            format="percentage"
+            className="text-2xl"
+            color="text-amber-400"
+          />
         </div>
       </div>
 
-      {/* Tabla Estilo Excel - Compacta y Profesional */}
+      {/* Tabla Estilo Excel - Compacta y Editable */}
       <div className="bg-[#0a0a0a] border border-white/[0.06] rounded-xl overflow-hidden">
         <div className="bg-gradient-to-r from-zinc-900 to-zinc-900/50 px-6 py-4 border-b border-white/[0.06]">
           <h3 className="text-sm font-semibold text-white flex items-center gap-2">
@@ -151,6 +253,7 @@ export async function ConversionContent({ range = "7d" }: { range?: string }) {
               <path d="M3 3h7v7H3zM14 3h7v7h-7zM14 14h7v7h-7zM3 14h7v7H3z" />
             </svg>
             Análisis Detallado de Conversión
+            <span className="ml-auto text-xs text-zinc-500 font-normal">✏️ Celdas editables</span>
           </h3>
         </div>
         
@@ -159,7 +262,7 @@ export async function ConversionContent({ range = "7d" }: { range?: string }) {
             <thead>
               <tr className="bg-zinc-900/50 border-b border-white/[0.06]">
                 <th className="text-left py-3 px-6 text-xs font-bold text-zinc-400 uppercase tracking-wider">Etapa</th>
-                <th className="text-right py-3 px-6 text-xs font-bold text-zinc-400 uppercase tracking-wider">Cantidad</th>
+                <th className="text-right py-3 px-6 text-xs font-bold text-zinc-400 uppercase tracking-wider">Cantidad ✏️</th>
                 <th className="text-right py-3 px-6 text-xs font-bold text-zinc-400 uppercase tracking-wider">% del Total</th>
                 <th className="text-right py-3 px-6 text-xs font-bold text-zinc-400 uppercase tracking-wider">Tasa</th>
                 <th className="text-left py-3 px-6 text-xs font-bold text-zinc-400 uppercase tracking-wider">Progreso</th>
@@ -173,19 +276,27 @@ export async function ConversionContent({ range = "7d" }: { range?: string }) {
                 >
                   <td className="py-4 px-6">
                     <div className="flex items-center gap-3">
-                      <div className={`w-2 h-2 rounded-full bg-${row.color}-400`} />
+                      {row.icon}
                       <span className="text-sm font-medium text-white">{row.etapa}</span>
                     </div>
                   </td>
                   <td className="text-right py-4 px-6">
-                    <span className={`text-sm font-bold tabular-nums text-${row.color}-400`}>
-                      {row.cantidad.toLocaleString()}
-                    </span>
+                    <EditableCell
+                      value={row.cantidad}
+                      onChange={(v) => {
+                        const field = index === 0 ? 'consultas' : index === 1 ? 'reservas' : 'rechazos'
+                        handleCellChange(field, v)
+                      }}
+                      format="number"
+                      className={`text-sm font-bold text-${row.color}-400`}
+                    />
                   </td>
                   <td className="text-right py-4 px-6">
-                    <span className="text-sm font-semibold text-zinc-300 tabular-nums">
-                      {row.porcentaje.toFixed(1)}%
-                    </span>
+                    <ReadOnlyCell
+                      value={row.porcentaje}
+                      format="percentage"
+                      color="text-zinc-300"
+                    />
                   </td>
                   <td className="text-right py-4 px-6">
                     <span className={`inline-flex items-center px-2.5 py-1 rounded-md text-xs font-semibold
@@ -211,55 +322,49 @@ export async function ConversionContent({ range = "7d" }: { range?: string }) {
                 </tr>
               ))}
             </tbody>
+            <tfoot>
+              <tr className="bg-zinc-900/30 border-t-2 border-white/[0.08]">
+                <td colSpan={5} className="px-6 py-4">
+                  <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                    <div className="flex flex-col gap-1">
+                      <span className="text-xs text-zinc-500">VALOR TOTAL ✏️</span>
+                      <EditableCell
+                        value={data.valorTotal}
+                        onChange={(v) => handleCellChange('valorTotal', v)}
+                        format="currency"
+                        min={0}
+                        max={10000000000}
+                        className="text-emerald-400 text-lg"
+                      />
+                    </div>
+                    <div className="flex flex-col gap-1">
+                      <span className="text-xs text-zinc-500">PROMEDIO / RESERVA</span>
+                      <ReadOnlyCell
+                        value={computed.valorPromReserva}
+                        format="currency"
+                        color="text-blue-400"
+                        className="text-lg"
+                      />
+                    </div>
+                    <div className="flex flex-col gap-1">
+                      <span className="text-xs text-zinc-500">EFICIENCIA DEL FUNNEL</span>
+                      <div className="flex items-center gap-2">
+                        <ReadOnlyCell
+                          value={computed.eficienciaFunnel}
+                          format="percentage"
+                          color={computed.statusColor}
+                          className="text-lg"
+                        />
+                        <span className={`text-sm font-semibold ${computed.statusColor}`}>
+                          {computed.statusFunnel}
+                        </span>
+                      </div>
+                    </div>
+                  </div>
+                </td>
+              </tr>
+            </tfoot>
           </table>
-        </div>
-
-        {/* Footer con métricas de negocio */}
-        <div className="bg-gradient-to-r from-zinc-900/50 to-zinc-900/30 px-6 py-4 border-t border-white/[0.06]">
-          <div className="grid grid-cols-2 lg:grid-cols-3 gap-6">
-            <div>
-              <p className="text-xs text-zinc-500 uppercase tracking-wider">Valor Total</p>
-              <p className="text-xl font-bold text-emerald-400 mt-1 tabular-nums">
-                ${(valorTotal / 1000000).toFixed(2)}M
-              </p>
-            </div>
-            <div>
-              <p className="text-xs text-zinc-500 uppercase tracking-wider">Valor Promedio/Reserva</p>
-              <p className="text-xl font-bold text-blue-400 mt-1 tabular-nums">
-                ${totalReservas > 0 ? ((valorTotal / totalReservas) / 1000).toFixed(0) : 0}K
-              </p>
-            </div>
-            <div className="col-span-2 lg:col-span-1">
-              <p className="text-xs text-zinc-500 uppercase tracking-wider">Eficiencia del Funnel</p>
-              <p className="text-xl font-bold text-amber-400 mt-1 tabular-nums">
-                {tasaConversion >= 30 ? 'Excelente' : tasaConversion >= 20 ? 'Buena' : 'Regular'}
-              </p>
-            </div>
-          </div>
-        </div>
-      </div>
-
-      {/* Indicador visual compacto del embudo */}
-      <div className="bg-[#0a0a0a] border border-white/[0.06] rounded-xl p-6">
-        <h3 className="text-sm font-semibold text-white mb-4">Visualización del Embudo</h3>
-        <div className="space-y-3">
-          {funnelData.map((stage, idx) => (
-            <div key={stage.etapa} className="relative">
-              <div className="flex items-center gap-3 mb-1.5">
-                <span className="text-xs text-zinc-400 w-40 truncate">{stage.etapa}</span>
-                <span className={`text-xs font-bold text-${stage.color}-400 tabular-nums`}>
-                  {stage.cantidad}
-                </span>
-              </div>
-              <div 
-                className={`h-8 bg-gradient-to-r from-${stage.color}-500/20 to-${stage.color}-500/5 border border-${stage.color}-500/20 rounded transition-all duration-700`}
-                style={{ width: `${stage.porcentaje}%`, maxWidth: '100%' }}
-              >
-                <div className={`h-full bg-gradient-to-r from-${stage.color}-500 to-${stage.color}-400 rounded opacity-70`} 
-                     style={{ width: '100%' }} />
-              </div>
-            </div>
-          ))}
         </div>
       </div>
     </div>
