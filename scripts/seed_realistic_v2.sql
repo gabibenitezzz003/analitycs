@@ -1,4 +1,4 @@
--- SCRIPT DE DATOS REALISTAS V2 (Corrección Final - Esquema Completo)
+-- SCRIPT DE DATOS REALISTAS V2 (Corrección Final - Esquema Completo + Latencia Real)
 -- Ejecutar en Supabase SQL Editor
 
 -- 1. ACTUALIZAR ESQUEMA (Transportistas y Métricas)
@@ -13,7 +13,7 @@ BEGIN
         ALTER TABLE public.b41_transportistas ADD COLUMN ranking DECIMAL(3,1) DEFAULT 0.0;
     END IF;
 
-    -- Métricas Diarias (El error reportado estaba aquí)
+    -- Métricas Diarias
     IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name = 'b41_metricas_diarias' AND column_name = 'tiempo_promedio') THEN
         ALTER TABLE public.b41_metricas_diarias ADD COLUMN tiempo_promedio DECIMAL(10,2) DEFAULT 0.0;
     END IF;
@@ -77,10 +77,9 @@ BEGIN
     WHILE curr_date <= CURRENT_DATE LOOP
         daily_msgs := 20 + floor(random() * 40);
         daily_sessions := 5 + floor(random() * 10);
-        daily_reserves := floor(daily_sessions * 0.3); -- Aprox 30% conversión
+        daily_reserves := floor(daily_sessions * 0.3); 
         daily_value := daily_reserves * (500000 + floor(random() * 1500000));
         
-        -- Evitar división por cero
         IF daily_sessions > 0 THEN
             tasa_conv := daily_reserves::decimal / daily_sessions;
         ELSE
@@ -92,7 +91,9 @@ BEGIN
             tasa_conversion, tiempo_promedio, created_at
         ) VALUES (
             curr_date, daily_msgs, daily_sessions, daily_reserves, daily_value,
-            tasa_conv, 1.0 + random(), NOW()
+            tasa_conv, 
+            22.0 + random()*5, -- Tiempo promedio diario (22s a 27s)
+            NOW()
         ) ON CONFLICT (fecha) DO UPDATE SET
             total_mensajes = EXCLUDED.total_mensajes,
             total_sesiones = EXCLUDED.total_sesiones,
@@ -112,21 +113,31 @@ BEGIN
             INSERT INTO public.b41_sesiones (session_id, telefono, inicio, created_at) 
             VALUES (session_uuid, rnd_driver, ts, ts) ON CONFLICT DO NOTHING;
             
+            -- Interacción 1: Consulta (Con latencia IA realista ~22s)
             INSERT INTO public.b41_interacciones (
                 session_id, telefono, mensaje_usuario, respuesta_ia, intencion, accion, 
                 tiempo_respuesta_ms, tokens_usados, origen, destino, created_at, es_exito
             ) VALUES
             (session_uuid, rnd_driver, 'Hola, hay viaje?', 'Tengo cargas disponibles.', 'consultar', 'CONSULTAR', 
-             800 + floor(random() * 1000), 100, NULL, NULL, ts + INTERVAL '10 seconds', false);
+             22000 + floor(random() * 10000), 100, NULL, NULL, ts + INTERVAL '25 seconds', true);
              
-             -- Si la sesión "convierte" (simulado simple para coherencia)
-             IF i <= daily_reserves THEN
+             -- 15% Probabilidad de FALLO / ERROR IA
+             IF random() < 0.15 THEN
+                 INSERT INTO public.b41_interacciones (
+                    session_id, telefono, mensaje_usuario, respuesta_ia, intencion, accion, 
+                    tiempo_respuesta_ms, tokens_usados, origen, destino, created_at, es_exito
+                ) VALUES
+                (session_uuid, rnd_driver, 'kdsjf kdsjf', 'Disculpa, no entendí tu mensaje.', 'fallback', 'FALLBACK', 
+                 25000 + floor(random() * 5000), 50, NULL, NULL, ts + INTERVAL '2 minutes', false);
+             
+             -- Si no falla, probar Reserva
+             ELSIF i <= daily_reserves THEN
                 INSERT INTO public.b41_interacciones (
                     session_id, telefono, mensaje_usuario, respuesta_ia, intencion, accion, 
                     tiempo_respuesta_ms, tokens_usados, origen, destino, created_at, es_exito
                 ) VALUES 
                 (session_uuid, rnd_driver, 'Reservar viaje', 'Reservado #B41-' || floor(random()*9999), 'reservar', 'RESERVAR', 
-                 1200, 200, 'Buenos Aires', 'Córdoba', ts + INTERVAL '1 minute', true);
+                 23000 + floor(random() * 5000), 200, 'Buenos Aires', 'Córdoba', ts + INTERVAL '1 minute', true);
              END IF;
         END LOOP;
         

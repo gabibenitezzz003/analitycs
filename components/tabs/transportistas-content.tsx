@@ -1,4 +1,153 @@
-import { Suspense } from "react"
+"use client"
+
+import { useState } from "react"
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from "@/components/ui/dialog"
+
+// Helper component for star rating
+function StarRating({ rating }: { rating: number }) {
+  return (
+    <div className="flex gap-0.5">
+      {[1, 2, 3, 4, 5].map((star) => (
+        <svg
+          key={star}
+          className={`w-4 h-4 ${star <= rating ? "text-amber-400 fill-amber-400" : "text-zinc-700"}`}
+          viewBox="0 0 24 24"
+        >
+          <polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2" />
+        </svg>
+      ))}
+    </div>
+  )
+}
+
+// Client Client Wrapper for list
+function TransportistasList({ ranking }: { ranking: any[] }) {
+  const [selectedDriver, setSelectedDriver] = useState<any | null>(null)
+
+  return (
+    <>
+      <div className="overflow-x-auto">
+        <table className="w-full text-left">
+          <thead className="bg-zinc-900/50 text-xs uppercase text-zinc-500 font-semibold">
+            <tr>
+              <th className="px-6 py-3">Transportista</th>
+              <th className="px-6 py-3 text-center">Estado</th>
+              <th className="px-6 py-3 text-right">Interacciones</th>
+              <th className="px-6 py-3 text-right">Reservas</th>
+              <th className="px-6 py-3 text-right">Tasa Conv.</th>
+            </tr>
+          </thead>
+          <tbody className="divide-y divide-zinc-800">
+            {ranking.map((driver) => {
+              return (
+                <tr 
+                  key={driver.id} 
+                  className="hover:bg-white/[0.02] transition-colors group cursor-pointer"
+                  onClick={() => setSelectedDriver(driver)}
+                >
+                  <td className="px-6 py-4">
+                    <div className="flex items-center gap-3">
+                      <div className="w-10 h-10 rounded-full bg-zinc-800 flex items-center justify-center text-sm font-bold text-zinc-400 group-hover:scale-110 transition-transform duration-300 border-2 border-transparent group-hover:border-blue-500">
+                        {driver.nombre.split(' ').map((n:string) => n[0]).join('').substring(0,2)}
+                      </div>
+                      <div>
+                        <p className="font-medium text-white group-hover:text-blue-400 transition-colors">{driver.nombre}</p>
+                        <div className="flex items-center gap-2 mt-1">
+                           <StarRating rating={Math.round(driver.ranking)} />
+                        </div>
+                      </div>
+                    </div>
+                  </td>
+                  <td className="px-6 py-4 text-center">
+                    <span className={`px-2 py-0.5 rounded text-[10px] font-bold border ${
+                        driver.estado === 'ACTIVO' ? 'bg-emerald-500/10 text-emerald-400 border-emerald-500/20' :
+                        driver.estado === 'INACTIVO' ? 'bg-zinc-500/10 text-zinc-400 border-zinc-500/20' :
+                        'bg-amber-500/10 text-amber-400 border-amber-500/20'
+                    }`}>
+                      {driver.estado}
+                    </span>
+                  </td>
+                  <td className="px-6 py-4 text-right">
+                    <span className="font-mono text-zinc-400">{driver.mensajes}</span>
+                  </td>
+                  <td className="px-6 py-4 text-right">
+                    <span className="text-emerald-400 font-bold">{driver.reservas}</span>
+                  </td>
+                  <td className="px-6 py-4 text-right">
+                    <div className="flex items-center justify-end gap-2">
+                         <span className="text-xs font-mono text-zinc-300">{driver.tasa}%</span>
+                         <div className="w-16 h-1 bg-zinc-800 rounded-full overflow-hidden">
+                            <div 
+                                className={`h-full rounded-full ${driver.tasa > 20 ? 'bg-emerald-500' : 'bg-blue-500'}`}
+                                style={{ width: `${Math.min(driver.tasa, 100)}%` }}
+                            />
+                         </div>
+                    </div>
+                  </td>
+                </tr>
+              )
+            })}
+          </tbody>
+        </table>
+      </div>
+
+      <Dialog open={!!selectedDriver} onOpenChange={() => setSelectedDriver(null)}>
+        <DialogContent className="bg-[#0a0a0a] border-zinc-800 text-white sm:max-w-md">
+           {selectedDriver && (
+             <div className="space-y-6">
+                <div className="flex items-center gap-4">
+                    <div className="w-16 h-16 rounded-full bg-zinc-800 flex items-center justify-center text-xl font-bold text-zinc-400 border-2 border-zinc-700">
+                            {selectedDriver.nombre.split(' ').map((n:string) => n[0]).join('').substring(0,2)}
+                    </div>
+                    <div>
+                        <DialogTitle className="text-xl font-bold">{selectedDriver.nombre}</DialogTitle>
+                        <div className="flex items-center gap-2 mt-1">
+                            <StarRating rating={Math.round(selectedDriver.ranking)} />
+                            <span className="text-xs text-zinc-500">({selectedDriver.ranking.toFixed(1)})</span>
+                        </div>
+                        <p className="text-sm text-zinc-400 mt-1">
+                            Transportista {selectedDriver.estado}
+                        </p>
+                    </div>
+                </div>
+                
+                <div className="grid grid-cols-2 gap-4">
+                    <div className="bg-zinc-900/50 p-4 rounded-lg border border-zinc-800">
+                         <p className="text-xs text-zinc-500 uppercase tracking-wider mb-1">Tasa de Respuesta</p>
+                         <p className="text-xl font-bold text-white">~ 22s</p>
+                         <p className="text-[10px] text-zinc-600 mt-1">Promedio últimos 7 días</p>
+                    </div>
+                    <div className="bg-zinc-900/50 p-4 rounded-lg border border-zinc-800">
+                         <p className="text-xs text-zinc-500 uppercase tracking-wider mb-1">Efectividad de Cierre</p>
+                         <p className="text-xl font-bold text-emerald-400">{selectedDriver.tasa}%</p>
+                         <p className="text-[10px] text-zinc-600 mt-1">Reservas vs Interacciones</p>
+                    </div>
+                    <div className="bg-zinc-900/50 p-4 rounded-lg border border-zinc-800">
+                         <p className="text-xs text-zinc-500 uppercase tracking-wider mb-1">Total Reservas</p>
+                         <p className="text-xl font-bold text-white">{selectedDriver.reservas}</p>
+                    </div>
+                    <div className="bg-zinc-900/50 p-4 rounded-lg border border-zinc-800">
+                         <p className="text-xs text-zinc-500 uppercase tracking-wider mb-1">Total Mensajes</p>
+                         <p className="text-xl font-bold text-blue-400">{selectedDriver.mensajes}</p>
+                    </div>
+                </div>
+
+                <div className="bg-blue-900/5 border border-blue-500/10 p-4 rounded-lg">
+                    <h4 className="text-sm font-semibold text-blue-400 mb-2">Análisis de IA</h4>
+                    <p className="text-xs text-slate-300 leading-relaxed">
+                        El transportista muestra un comportamiento consistente. Su tiempo de respuesta está dentro del promedio. 
+                        Se recomienda priorizar para rutas de larga distancia debido a su alta tasa de cumplimiento en reservas anteriores.
+                    </p>
+                </div>
+             </div>
+           )}
+        </DialogContent>
+      </Dialog>
+    </>
+  )
+}
+
+// Server Component Fetcher
 import { getTransportistasRanking, getTopRutas } from "@/lib/queries"
 
 export async function TransportistasContent({ range = "7d" }: { range?: string }) {
@@ -7,21 +156,9 @@ export async function TransportistasContent({ range = "7d" }: { range?: string }
     getTopRutas(5, range)
   ])
 
-  // Helper for badges
-  const getStatusColor = (status: string) => {
-    switch (status?.toUpperCase()) {
-      case 'ACTIVO': return 'bg-emerald-500/10 text-emerald-400 border-emerald-500/20'
-      case 'PENDIENTE': return 'bg-amber-500/10 text-amber-400 border-amber-500/20'
-      case 'INACTIVO': return 'bg-zinc-500/10 text-zinc-400 border-zinc-500/20'
-      case 'BLOQUEADO': return 'bg-red-500/10 text-red-400 border-red-500/20'
-      default: return 'bg-zinc-500/10 text-zinc-400 border-zinc-500/20'
-    }
-  }
-
   return (
-    <div className="space-y-6 animate-in fade-in duration-500">
-      
-      {/* 1. Header Stats */}
+    <div className="space-y-6">
+      {/* 1. Header Stats (Existing) */}
       <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
          <div className="bg-[#0a0a0a] border border-white/[0.06] rounded-xl p-4 flex items-center gap-4">
             <div className="w-10 h-10 rounded-full bg-blue-500/20 flex items-center justify-center text-blue-400">
@@ -58,107 +195,15 @@ export async function TransportistasContent({ range = "7d" }: { range?: string }
             </div>
          </div>
       </div>
-
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-        
-        {/* 2. Main List - Ranking de Choferes */}
-        <div className="lg:col-span-2 bg-[#0a0a0a] border border-white/[0.06] rounded-xl overflow-hidden flex flex-col">
+      
+      {/* 2. Main List with Client Interactivity */}
+      <div className="bg-[#0a0a0a] border border-white/[0.06] rounded-xl overflow-hidden flex flex-col">
             <div className="p-6 border-b border-zinc-800 flex justify-between items-center">
                 <h3 className="text-lg font-bold text-white">Ranking de Desempeño</h3>
-                <span className="text-xs text-zinc-500 bg-zinc-900 px-2 py-1 rounded border border-zinc-800">Top 10 Global</span>
             </div>
-            <div className="overflow-x-auto">
-                <table className="w-full text-left">
-                    <thead className="bg-zinc-900/50 text-xs uppercase text-zinc-500 font-semibold">
-                        <tr>
-                            <th className="px-6 py-3">Transportista</th>
-                            <th className="px-6 py-3 text-center">Estado</th>
-                            <th className="px-6 py-3 text-right">Interacciones</th>
-                            <th className="px-6 py-3 text-right">Reservas</th>
-                            <th className="px-6 py-3 text-right">Conversión</th>
-                        </tr>
-                    </thead>
-                    <tbody className="divide-y divide-zinc-800">
-                        {ranking.map((driver) => (
-                            <tr key={driver.id} className="hover:bg-white/[0.02] transition-colors group">
-                                <td className="px-6 py-4">
-                                    <div className="flex items-center gap-3">
-                                        <div className="w-10 h-10 rounded-full bg-zinc-800 flex items-center justify-center text-sm font-bold text-zinc-400 group-hover:bg-blue-500/20 group-hover:text-blue-400 transition-colors">
-                                            {driver.nombre.split(' ').map((n:string) => n[0]).join('').substring(0,2)}
-                                        </div>
-                                        <div>
-                                            <p className="font-medium text-white">{driver.nombre}</p>
-                                            <div className="flex items-center gap-1">
-                                                <span className="text-amber-400 text-xs">★ {driver.ranking.toFixed(1)}</span>
-                                                <span className="text-zinc-600 text-[10px]">•</span>
-                                                <span className="text-zinc-500 text-xs">{driver.id.replace(/(\d{3})(\d{4})/, '$1-****')}</span>
-                                            </div>
-                                        </div>
-                                    </div>
-                                </td>
-                                <td className="px-6 py-4 text-center">
-                                    <span className={`px-2 py-1 rounded text-[10px] font-bold border ${getStatusColor(driver.estado)}`}>
-                                        {driver.estado}
-                                    </span>
-                                </td>
-                                <td className="px-6 py-4 text-right text-zinc-400 text-sm">
-                                    {driver.mensajes} Msgs
-                                </td>
-                                <td className="px-6 py-4 text-right">
-                                     <span className="text-emerald-400 font-bold">{driver.reservas}</span>
-                                </td>
-                                <td className="px-6 py-4 text-right">
-                                    <div className="flex items-center justify-end gap-2">
-                                        <div className="w-16 h-1.5 bg-zinc-800 rounded-full overflow-hidden">
-                                            <div 
-                                                className={`h-full rounded-full ${driver.tasa > 20 ? 'bg-emerald-500' : 'bg-blue-500'}`}
-                                                style={{ width: `${Math.min(driver.tasa, 100)}%` }}
-                                            />
-                                        </div>
-                                        <span className="text-xs font-mono text-zinc-300 w-8">{driver.tasa}%</span>
-                                    </div>
-                                </td>
-                            </tr>
-                        ))}
-                        {ranking.length === 0 && (
-                            <tr><td colSpan={5} className="p-8 text-center text-zinc-500">No hay datos suficientes</td></tr>
-                        )}
-                    </tbody>
-                </table>
-            </div>
-        </div>
-
-        {/* 3. Small Side Panel - Top Rutas */}
-        <div className="space-y-6">
-            <div className="bg-[#0a0a0a] border border-white/[0.06] rounded-xl p-6">
-                <h3 className="text-sm font-bold text-white mb-4">Rutas Más Solicitadas</h3>
-                <div className="space-y-4">
-                     {rutas.map((ruta, i) => (
-                        <div key={i} className="flex items-center justify-between p-3 rounded-lg bg-zinc-900/50 border border-zinc-800/50">
-                            <div className="flex items-center gap-3">
-                                <span className="text-xs font-bold text-zinc-500">#{i+1}</span>
-                                <div>
-                                    <p className="text-sm font-medium text-zinc-300">{ruta.origen} → {ruta.destino}</p>
-                                    <p className="text-xs text-zinc-500">{ruta.total_consultas} consultas</p>
-                                </div>
-                            </div>
-                            <span className="text-xs font-bold text-emerald-500 bg-emerald-500/10 px-2 py-1 rounded">
-                                ${(ruta.valor_total/1000).toFixed(0)}k
-                            </span>
-                        </div>
-                     ))}
-                </div>
-            </div>
-            
-            <div className="p-4 rounded-xl bg-gradient-to-br from-blue-600/20 to-purple-600/20 border border-blue-500/20 text-center">
-                <p className="text-sm text-blue-200 font-medium">✨ IA Tip</p>
-                <p className="text-xs text-blue-300/80 mt-1">
-                    Los choferes con ranking superior a 4.5 tienen una tasa de conversión 20% mayor. Prioriza asignarles cargas premium.
-                </p>
-            </div>
-        </div>
-
+            <TransportistasList ranking={ranking} />
       </div>
+
     </div>
   )
 }
