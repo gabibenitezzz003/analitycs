@@ -613,35 +613,46 @@ export async function getTransportistasGeoData() {
     const { data: transportistas, error } = await supabase
       .from('b41_transportistas')
       .select('telefono, nombre, apellido')
-      .eq('estado', 'ACTIVO') // Filtrar solo activos para el mapa
+      .eq('estado', 'ACTIVO') 
       .limit(100)
     
     if (error) throw error
     if (!transportistas) return []
 
+    // Cache keys for perf
+    const cityKeys = Object.keys(CIUDADES_LATAM);
+
     // Para cada transportista, obtener sus rutas históricas
     const transportistasConAnalisis = await Promise.all(
       transportistas.map(async (t) => {
-        // Obtenemos historial de viajes (Limitamos a 100 para tener buena muestra)
+        // Aumentamos limite a 300 para capturar historial mas antiguo
         const { data: interacciones } = await supabase
           .from('b41_interacciones')
           .select('origen, destino, es_exito, created_at')
           .eq('telefono', t.telefono)
           .order('created_at', { ascending: false })
-          .limit(100)
+          .limit(300)
 
         const safeInteracciones = interacciones || []
         
-        // FILTRO: Solo mostrar choferes con al menos 5 viajes
-        if (safeInteracciones.length < 5) return null
+        // Relajamos filtro minimo para debug, pero mantenemos logica de negocio
+        if (safeInteracciones.length === 0) return null
 
-        // Frecuencia Normalizada
-        const ubicacionesFrecuencia: Record<string, number> = {}
+        // Normalización Robusta (ignora acentos y case)
         const normalizeCity = (city: string) => {
             if (!city) return null
-            const match = Object.keys(CIUDADES_LATAM).find(k => k.toLowerCase() === city.toLowerCase() || k.toLowerCase().includes(city.toLowerCase()))
-            return match || city // Retorna el match del diccionario o la ciudad original si no encuentra
+            const cleanCity = city.normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase().trim()
+            
+            // 1. Exact/Partial Match on Cleaned Keys
+            const match = cityKeys.find(k => {
+                const cleanKey = k.normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase()
+                return cleanKey === cleanCity || cleanKey.includes(cleanCity) || cleanCity.includes(cleanKey)
+            })
+            
+            return match || null // Retorna NULL si no encuentra match valido en diccionario
         }
+
+        const ubicacionesFrecuencia: Record<string, number> = {}
 
         safeInteracciones.forEach(i => {
            const origenNorm = normalizeCity(i.origen)
@@ -678,13 +689,14 @@ export async function getTransportistasGeoData() {
 
         // Stats
         const exitosos = safeInteracciones.filter(i => i.es_exito).length
-        const tasaExito = (exitosos / safeInteracciones.length) * 100
+        const tasaExito = safeInteracciones.length > 0 ? (exitosos / safeInteracciones.length) * 100 : 0
         
-        // Top Rutas (Normalizadas)
+        // Top Rutas (Aumentado a 20)
         const rutasFrecuencia: Record<string, number> = {}
         safeInteracciones.forEach(i => {
             const o = normalizeCity(i.origen)
             const d = normalizeCity(i.destino)
+            // Solo incluimos si AMBOS puntos son validos geograificamente
             if (o && d && CIUDADES_LATAM[o] && CIUDADES_LATAM[d]) {
                 const ruta = `${o} → ${d}`
                 rutasFrecuencia[ruta] = (rutasFrecuencia[ruta] || 0) + 1
@@ -694,18 +706,18 @@ export async function getTransportistasGeoData() {
         const topRutas = Object.entries(rutasFrecuencia)
             .map(([ruta, freq]) => ({ ruta, frecuencia: freq }))
             .sort((a, b) => b.frecuencia - a.frecuencia)
-            .slice(0, 3)
+            .slice(0, 20) // Mostramos hasta 20 rutas para ver "todo" el historial
 
         return {
           ...t,
           centroide,
-          radioAccion: Math.round(radioMax) || 100, // Minimo 100km visibles
+          radioAccion: Math.round(radioMax) || 100, 
           totalViajes: safeInteracciones.length,
           viajesExitosos: exitosos,
           tasaExito: Math.round(tasaExito),
           especializacion: 60,
           topRutas,
-          ubicacionesFrecuentes: []
+          ubicacionesFrecuentes: [] // Placeholder
         }
       })
     )
