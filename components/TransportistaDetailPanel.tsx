@@ -14,9 +14,9 @@ export function TransportistaDetailPanel({
   if (!transportista) return null
 
   return (
-    <div className="fixed top-0 right-0 h-full w-96 bg-[#0a0a0a] border-l border-white/[0.06] shadow-2xl z-50 overflow-y-auto">
+    <div className="fixed top-0 right-0 h-full w-96 bg-[#0a0a0a] border-l border-white/[0.06] shadow-2xl z-[9999] overflow-y-auto">
       {/* Header */}
-      <div className="sticky top-0 bg-gradient-to-b from-[#0a0a0a] to-transparent backdrop-blur-sm border-b border-white/[0.06] p-6">
+      <div className="sticky top-0 bg-gradient-to-b from-[#0a0a0a] to-transparent backdrop-blur-sm border-b border-white/[0.06] p-6 z-10">
         <div className="flex items-start justify-between">
           <div>
             <div className="flex items-center gap-2 mb-1">
