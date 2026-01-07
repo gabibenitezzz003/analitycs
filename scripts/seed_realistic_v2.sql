@@ -140,21 +140,25 @@ BEGIN
              
              -- 15% Probabilidad de FALLO con motivos variados
              IF random() < 0.15 THEN
-                 -- Seleccionar un motivo aleatorio
-                 rnd_driver := (ARRAY[
-                    'El precio es muy caro, no me sirve', 
-                    'No llegan a San Luis? necesito esa ruta', 
-                    'El horario de carga no me conviene, tardan mucho',
-                    'kdsjf kdsjf', -- Incoherente
-                    'Quiero hablar con un humano por favor'
-                 ])[floor(random()*5)+1];
+                 -- Seleccionar un motivo aleatorio y guardarlo en rnd_msg (no sobrescribir rnd_driver)
+                 DECLARE
+                    rnd_msg TEXT;
+                 BEGIN
+                     rnd_msg := (ARRAY[
+                        'El precio es muy caro, no me sirve', 
+                        'No llegan a San Luis? necesito esa ruta', 
+                        'El horario de carga no me conviene, tardan mucho',
+                        'kdsjf kdsjf', 
+                        'Quiero hablar con un humano por favor'
+                     ])[floor(random()*5)+1];
 
-                 INSERT INTO public.b41_interacciones (
-                    session_id, telefono, mensaje_usuario, respuesta_ia, intencion, accion, 
-                    tiempo_respuesta_ms, tokens_usados, origen, destino, created_at, es_exito
-                ) VALUES
-                (session_uuid, rnd_driver, rnd_driver, 'Disculpa, no pude procesar tu solicitud.', 'fallback', 'FALLBACK', 
-                 25000 + floor(random() * 5000), 50, NULL, NULL, ts + INTERVAL '2 minutes', false);
+                     INSERT INTO public.b41_interacciones (
+                        session_id, telefono, mensaje_usuario, respuesta_ia, intencion, accion, 
+                        tiempo_respuesta_ms, tokens_usados, origen, destino, created_at, es_exito
+                    ) VALUES
+                    (session_uuid, rnd_driver, rnd_msg, 'Disculpa, no pude procesar tu solicitud.', 'fallback', 'FALLBACK', 
+                     25000 + floor(random() * 5000), 50, NULL, NULL, ts + INTERVAL '2 minutes', false);
+                 END;
              
              -- Si no falla, probar Reserva con la ruta seleccionada
              ELSIF i <= daily_reserves THEN
