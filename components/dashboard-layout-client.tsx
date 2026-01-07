@@ -92,7 +92,7 @@ export function DashboardLayoutClient({
         <footer className="mt-12 pt-6 border-t border-zinc-800/50 no-print">
           <div className="flex flex-col sm:flex-row items-center justify-between gap-4 text-xs text-zinc-600">
             <span>Follow Hub © 2026 · Analytics B.4.1</span>
-            <span>Powered by Supabase · Real-time Analytics</span>
+            <span>Realizado por el equipo de IA follow</span>
           </div>
         </footer>
       </div>

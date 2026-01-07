@@ -135,8 +135,18 @@ export function TransportistasList({ ranking }: { ranking: any[] }) {
                 <div className="bg-blue-900/5 border border-blue-500/10 p-4 rounded-lg">
                     <h4 className="text-sm font-semibold text-blue-400 mb-2">Análisis de IA</h4>
                     <p className="text-xs text-slate-300 leading-relaxed">
-                        El transportista muestra un comportamiento consistente. Su tiempo de respuesta está dentro del promedio. 
-                        Se recomienda priorizar para rutas de larga distancia debido a su alta tasa de cumplimiento en reservas anteriores.
+                        {selectedDriver.tasa > 30 
+                            ? "Chofer de alto rendimiento. " 
+                            : selectedDriver.tasa > 15 
+                            ? "Desempeño consistente. " 
+                            : "Requiere monitoreo de conversión. "}
+                        
+                        Su tiempo de respuesta promedio de ~22s es {selectedDriver.ranking >= 4.5 ? "excelente" : "adecuado"}.
+                        {selectedDriver.ranking >= 4.8 
+                            ? " Altamente recomendado para asignaciones prioritarias." 
+                            : selectedDriver.reservas > 50 
+                            ? " Muestra gran experiencia en rutas frecuentes."
+                            : " Se sugiere asignar rutas cortas para validar fidelización."}
                     </p>
                 </div>
              </div>
