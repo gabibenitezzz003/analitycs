@@ -149,39 +149,118 @@ export function GeoContent() {
 
       // Clear previous overlays
       if (radioCircle) map.removeLayer(radioCircle)
-      routeLines.forEach(line => map.removeLayer(line))
+      routeLines.forEach(line => {
+        map.removeLayer(line)
+        if ((line as any)._intervalId) clearInterval((line as any)._intervalId)
+      })
       
       const newLines: any[] = []
 
-      // 1. Draw Routes (Dotted Lines)
-      transportista.topRutas.forEach((rutaObj: any) => {
+      // 1. Draw Routes (Dotted Lines Animated - Professional Style)
+      transportista.topRutas.forEach((rutaObj: any, idx: number) => {
           const [origen, destino] = rutaObj.ruta.split(' → ')
           const c1 = CIUDADES_LATAM[origen]
           const c2 = CIUDADES_LATAM[destino]
 
-          if (c1 && c2) {
+          if (c1 && c2 && idx === 0) { // Main Route Highlighting
+             // Origin Marker (Green Pulse)
+             const originIcon = L.divIcon({
+                 className: 'custom-origin',
+                 html: `<div style="display:flex; flex-direction:column; align-items:center;">
+                          <div style="background:#10B981; width:12px; height:12px; border-radius:50%; box-shadow:0 0 0 4px rgba(16,185,129,0.3);"></div>
+                          <div style="background:#064e3b; color:#34d399; font-size:10px; padding:2px 6px; border-radius:4px; margin-top:4px; font-weight:bold;">ORIGEN</div>
+                        </div>`,
+                 iconSize: [40, 40],
+                 iconAnchor: [20, 8]
+             })
+             const m1 = L.marker(c1, { icon: originIcon }).addTo(map)
+             newLines.push(m1)
+
+             // Destination Marker (Red Pulse)
+             const destIcon = L.divIcon({
+                 className: 'custom-dest',
+                 html: `<div style="display:flex; flex-direction:column; align-items:center;">
+                          <div style="background:#EF4444; width:12px; height:12px; border-radius:50%; box-shadow:0 0 0 4px rgba(239,68,68,0.3);"></div>
+                          <div style="background:#450a0a; color:#f87171; font-size:10px; padding:2px 6px; border-radius:4px; margin-top:4px; font-weight:bold;">DESTINO</div>
+                        </div>`,
+                 iconSize: [40, 40],
+                 iconAnchor: [20, 8]
+             })
+             const m2 = L.marker(c2, { icon: destIcon }).addTo(map)
+             newLines.push(m2)
+
+             // Route Line (Amber Dashed Animated)
+             const line = L.polyline([c1, c2], {
+                 color: '#F59E0B',
+                 weight: 4,
+                 dashArray: '10, 15',
+                 opacity: 0.9,
+                 lineCap: 'round'
+             }).addTo(map)
+             newLines.push(line)
+
+             // Animation
+             let offset = 0
+             const interval = setInterval(() => {
+                 offset = (offset - 1) % 25
+                 line.setStyle({ dashOffset: offset.toString() })
+             }, 50)
+             ;(line as any)._intervalId = interval
+
+             // Midpoint Truck Icon
+             const midPoint: [number, number] = [
+                (c1[0] + c2[0]) / 2,
+                (c1[1] + c2[1]) / 2
+             ]
+             
+             const truckIcon = L.divIcon({
+                 className: 'custom-truck',
+                 html: `<div style="background:#F59E0B; width:32px; height:32px; border-radius:50%; display:flex; align-items:center; justify-content:center; box-shadow:0 4px 12px rgba(245,158,11,0.5); border:2px solid white;">
+                    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="2">
+                        <rect x="1" y="3" width="15" height="13"></rect>
+                        <polygon points="16 8 20 8 23 11 23 16 16 16 16 8"></polygon>
+                        <circle cx="5.5" cy="18.5" r="2.5"></circle>
+                        <circle cx="18.5" cy="18.5" r="2.5"></circle>
+                    </svg>
+                 </div>`,
+                 iconSize: [32, 32],
+                 iconAnchor: [16, 16]
+             })
+             const truckMarker = L.marker(midPoint, { icon: truckIcon, zIndexOffset: 1000 }).addTo(map)
+             newLines.push(truckMarker)
+
+             // Smart Zoom
+             map.fitBounds(L.latLngBounds([c1, c2]), { padding: [100, 100], maxZoom: 8 })
+
+          } else if (c1 && c2) {
+             // Secondary Routes (Ghost lines)
              const line = L.polyline([c1, c2], {
                  color: '#3b82f6',
-                 weight: 2,
-                 dashArray: '5, 10',
-                 opacity: 0.6
+                 weight: 1,
+                 dashArray: '4, 8',
+                 opacity: 0.3
              }).addTo(map)
              newLines.push(line)
           }
       })
       setRouteLines(newLines)
 
-      // 2. Draw Radius Circle
-      const circle = L.circle([transportista.centroide.lat, transportista.centroide.lng], {
-        radius: (transportista.radioAccion || 500) * 1000,
-        color: '#10b981',
-        fillOpacity: 0.1,
-        weight: 1,
-        dashArray: '5, 5'
-      }).addTo(map)
-      setRadioCircle(circle)
-      
-      map.flyTo([transportista.centroide.lat, transportista.centroide.lng], 6, { duration: 1.5 })
+      // 2. Draw Radius Circle (Contextual)
+      if (transportista.centroide) {
+        const hasRoutes = transportista.topRutas && transportista.topRutas.length > 0
+        const circle = L.circle([transportista.centroide.lat, transportista.centroide.lng], {
+          radius: (transportista.radioAccion || 500) * 1000,
+          color: '#10b981',
+          fillOpacity: hasRoutes ? 0.05 : 0.1,
+          weight: 1,
+          dashArray: '4, 4'
+        }).addTo(map)
+        setRadioCircle(circle)
+        
+        if (!hasRoutes) {
+            map.flyTo([transportista.centroide.lat, transportista.centroide.lng], 6)
+        }
+      }
     }
   }
 
