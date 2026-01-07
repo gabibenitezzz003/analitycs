@@ -1,129 +1,103 @@
 import { Suspense } from "react"
-import { getMetricas, getInteracciones, getSesionesActivas, getValorTotal, getTopRutas } from "@/lib/queries"
-import { ChartsSection, ActivitySection } from "./charts-section"
-import { OfertasActivasTable } from "@/components/ofertas-activas-table"
-import { KPIsSection } from "./kpis-section"
+import { getMetricas, getMetricasDiarias, getActividadPorHora } from "@/lib/queries"
+import { PremiumTrendChart } from "@/components/charts/premium-trend-chart"
+import { PremiumActivityHeatmap } from "@/components/charts/premium-activity-heatmap"
+import { KPICard } from "@/components/ui/kpi-card"
 
-async function KPIsWrapper({ range }: { range: string }) {
-  // Now fetching objects with { value, trend } or similar structure
-  const [interacciones, sesiones, metricas, valorTotal] = await Promise.all([
-    getInteracciones(range),
-    getSesionesActivas(range), 
+// Icons
+const MessageIcon = <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M21 11.5a8.38 8.38 0 0 1-.9 3.8 8.5 8.5 0 0 1-7.6 4.7 8.38 8.38 0 0 1-3.8-.9L3 21l1.9-5.7a8.38 8.38 0 0 1-.9-3.8 8.5 8.5 0 0 1 4.7-7.6 8.38 8.38 0 0 1 3.8-.9h.5a8.48 8.48 0 0 1 8 8v.5z"/></svg>
+const CheckIcon = <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><polyline points="20 6 9 17 4 12"/></svg>
+const DollarIcon = <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><line x1="12" y1="1" x2="12" y2="23"/><path d="M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"/></svg>
+const TrendIcon = <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><polyline points="23 6 13.5 15.5 8.5 10.5 1 18"/><polyline points="17 6 23 6 23 12"/></svg>
+
+export async function ResumenContent({ range }: { range: string }) {
+  const [metricas, historial, actividadHora] = await Promise.all([
     getMetricas(range),
-    getValorTotal(range),
+    getMetricasDiarias(range),
+    getActividadPorHora(range)
   ])
 
   return (
-    <KPIsSection 
-      initialInteracciones={interacciones}
-      initialSesiones={sesiones}
-      initialMetricas={metricas}
-      initialValorTotal={valorTotal}
-    />
-  )
-}
-
-async function TopRutasSection({ range }: { range: string }) {
-  const rutas = await getTopRutas(5, range)
-
-  return (
-    <div className="bg-[#0a0a0a] border border-white/[0.06] rounded-xl p-6 card-animate">
-      <div className="flex items-center justify-between mb-6">
-        <h3 className="text-sm font-semibold text-white flex items-center gap-2">
-          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-            <path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z" />
-            <circle cx="12" cy="10" r="3" />
-          </svg>
-          Top 5 Rutas por Valor
-        </h3>
+    <div className="space-y-6 animate-in fade-in duration-500">
+      {/* 1. KPIs Section - Premium Glow */}
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+        <KPICard
+          title="Interacciones Totales"
+          value={metricas.total_mensajes.toLocaleString()}
+          trend={{ value: metricas.trends.total_mensajes, label: "vs periodo anterior" }}
+          icon={MessageIcon}
+          color="blue"
+          glow
+        />
+        <KPICard
+          title="Reservas Confirmadas"
+          value={metricas.total_reservas.toLocaleString()}
+          trend={{ value: metricas.trends.total_reservas, label: "vs periodo anterior" }}
+          icon={CheckIcon}
+          color="emerald"
+          glow
+        />
+        <KPICard
+          title="Valor Total Procesado"
+          value={`$${(metricas.valor_total / 1000000).toFixed(1)}M`}
+          trend={{ value: metricas.trends.valor_total, label: "vs periodo anterior" }}
+          icon={DollarIcon}
+          color="amber"
+          glow
+        />
+        <KPICard
+          title="Tasa Conversión"
+          value={`${(metricas.tasa_conversion).toFixed(1)}%`}
+          trend={{ value: metricas.trends.tasa_conversion, label: "vs periodo anterior" }}
+          icon={TrendIcon}
+          color="cyan"
+          glow
+        />
       </div>
-      <div className="overflow-x-auto">
-        <table className="w-full">
-          <thead>
-            <tr className="border-b border-zinc-800">
-              <th className="text-left py-3 px-4 text-xs font-semibold text-zinc-500 uppercase tracking-wider">Ruta</th>
-              <th className="text-right py-3 px-4 text-xs font-semibold text-zinc-500 uppercase tracking-wider">
-                Valor Total
-              </th>
-              <th className="text-right py-3 px-4 text-xs font-semibold text-zinc-500 uppercase tracking-wider">
-                Consultas
-              </th>
-              <th className="text-right py-3 px-4 text-xs font-semibold text-zinc-500 uppercase tracking-wider">
-                Conversión
-              </th>
-            </tr>
-          </thead>
-          <tbody>
-            {rutas.length > 0 ? (
-              rutas.map((ruta: any, index: number) => (
-                <tr 
-                  key={index} 
-                  className="border-b border-white/[0.06] hover:bg-white/[0.02] transition-colors animate-fade-in"
-                  style={{ animationDelay: `${index * 100}ms` }}
-                >
-                  <td className="py-4 px-4">
-                    <span className="text-sm font-semibold text-blue-400">
-                      {ruta.origen} → {ruta.destino}
-                    </span>
-                  </td>
-                  <td className="text-right py-4 px-4">
-                    <span className="text-sm font-bold text-emerald-400">
-                      ${(ruta.total_valor || ruta.valor_total || 0 / 1000000).toFixed(1)}M
-                    </span>
-                  </td>
-                  <td className="text-right py-4 px-4">
-                    <span className="text-sm text-zinc-300">{ruta.total_consultas}</span>
-                  </td>
-                  <td className="text-right py-4 px-4">
-                    <span className="text-sm text-zinc-400">{ruta.tasa_conversion ? Number(ruta.tasa_conversion).toFixed(1) : 0}%</span>
-                  </td>
-                </tr>
-              ))
-            ) : (
-              <tr>
-                <td colSpan={4} className="text-center py-8 text-zinc-500">
-                  No hay datos de rutas disponibles
-                </td>
-              </tr>
-            )}
-          </tbody>
-        </table>
-      </div>
-    </div>
-  )
-}
 
-function LoadingSkeleton() {
-  return (
-    <div className="animate-pulse space-y-4">
-      <div className="h-24 bg-zinc-800/50 rounded-xl" />
-    </div>
-  )
-}
+      {/* 2. Main Chart Section */}
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+        <div className="lg:col-span-2 bg-[#0a0a0a] border border-white/[0.06] rounded-xl p-6 relative overflow-hidden group">
+          <div className="absolute inset-0 bg-blue-500/5 opacity-0 group-hover:opacity-100 transition-opacity duration-500" />
+          <div className="flex items-center justify-between mb-2 relative z-10">
+            <div>
+               <h3 className="text-lg font-bold text-white tracking-tight">Tendencia de Volumen</h3>
+               <p className="text-sm text-zinc-500">Interacciones vs Reservas (Últimos {range})</p>
+            </div>
+            {/* Legend */}
+            <div className="flex gap-4">
+                <div className="flex items-center gap-2">
+                    <div className="w-2 h-2 rounded-full bg-blue-500" />
+                    <span className="text-xs text-zinc-400">Mensajes</span>
+                </div>
+                <div className="flex items-center gap-2">
+                    <div className="w-2 h-2 rounded-full bg-emerald-500" />
+                    <span className="text-xs text-zinc-400">Reservas</span>
+                </div>
+            </div>
+          </div>
+          <div className="relative z-10">
+             <PremiumTrendChart 
+                data={historial} 
+                categories={["total_mensajes", "total_reservas"]} 
+                colors={["#3b82f6", "#10b981"]} 
+             />
+          </div>
+        </div>
 
-export async function ResumenContent({ range = "7d" }: { range?: string }) {
-  return (
-    <div className="space-y-6">
-      {/* KPIs */}
-      <Suspense fallback={<LoadingSkeleton />}>
-        <KPIsWrapper range={range} />
-      </Suspense>
-
-      {/* Gráficos */}
-      <ChartsSection range={range} />
-
-      {/* Actividad y Métricas */}
-      <ActivitySection range={range} />
-
-      {/* Bottom Row: Rutas + Ofertas */}
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-        <Suspense fallback={<LoadingSkeleton />}>
-          <TopRutasSection range={range} />
-        </Suspense>
-        
-        <Suspense fallback={<LoadingSkeleton />}>
-          <OfertasActivasTable />
-        </Suspense>
+        {/* 3. Heatmap Section */}
+        <div className="bg-[#0a0a0a] border border-white/[0.06] rounded-xl p-6 relative overflow-hidden group h-full">
+          <div className="absolute inset-0 bg-purple-500/5 opacity-0 group-hover:opacity-100 transition-opacity duration-500" />
+          <div className="flex items-center justify-between mb-2 relative z-10">
+            <div>
+               <h3 className="text-lg font-bold text-white tracking-tight">Actividad Horaria</h3>
+               <p className="text-sm text-zinc-500">Distribución de tráfico</p>
+            </div>
+          </div>
+          <div className="relative z-10 h-[calc(100%-2rem)] flex flex-col justify-center">
+            <PremiumActivityHeatmap data={actividadHora} />
+          </div>
+        </div>
       </div>
     </div>
   )
