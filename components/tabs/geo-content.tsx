@@ -3,33 +3,8 @@
 import { useEffect, useRef, useState } from "react"
 import { TransportistaDetailPanel } from "@/components/TransportistaDetailPanel"
 import { cn } from "@/lib/utils"
-
-// Coordinate dictionary (Expanded LATAM)
-const CIUDADES_LATAM: Record<string, [number, number]> = {
-  // Argentina
-  "Buenos Aires": [-34.6037, -58.3816],
-  "Córdoba": [-31.4201, -64.1888],
-  "Rosario": [-32.9468, -60.6393],
-  "Mendoza": [-32.8908, -68.8272],
-  "Tucumán": [-26.8083, -65.2176],
-  "Mar del Plata": [-38.0055, -57.5426],
-  "Salta": [-24.7821, -65.4232],
-  "San Juan": [-31.5375, -68.5364],
-  "Neuquén": [-38.9516, -68.0591],
-  "Bahía Blanca": [-38.7196, -62.2724],
-  "Formosa": [-26.1775, -58.1781],
-  "San Luis": [-33.2950, -66.3356],
-  
-  // Internacionales
-  "Montevideo": [-34.9011, -56.1645], // Uruguay
-  "Santiago": [-33.4489, -70.6693],   // Chile
-  "São Paulo": [-23.5505, -46.6333],  // Brasil
-  "Rio de Janeiro": [-22.9068, -43.1729], // Brasil
-  "Asunción": [-25.2637, -57.5759],   // Paraguay
-  "La Paz": [-16.5000, -68.1500],     // Bolivia
-  "Lima": [-12.0464, -77.0428],       // Perú
-  "Bogotá": [4.7110, -74.0721],       // Colombia
-}
+// Import centralized dictionary to ensure consistency
+import { CIUDADES_LATAM } from "@/lib/queries"
 
 declare global {
   interface Window {
@@ -54,6 +29,10 @@ export function GeoContent() {
       setIsLoading(true)
       const { loadTransportistasGeoData } = await import("@/app/actions/geo-actions")
       const data = await loadTransportistasGeoData()
+      console.log("GEO DEBUG: Transportistas cargados:", data.length)
+      if (data.length > 0) {
+          console.log("GEO DEBUG: Primer transportista rutas:", data[0].topRutas)
+      }
       setTransportistas(data)
       setIsLoading(false)
     }
@@ -116,9 +95,9 @@ export function GeoContent() {
     const L = window.L
     const map = mapInstanceRef.current
 
-    // Clear previous markers if we implemented a clear logic, but for now we append. 
-    // In a real app we'd manage a LayerGroup.
-
+    // Clear previous markers
+    // Note: We are appending here, in a real update scenario we might want to clear.
+    
     transportistas.forEach((t) => {
       if (!t.centroide) return
 
@@ -136,6 +115,7 @@ export function GeoContent() {
   }, [transportistas, selectedTransportista])
 
   async function handleTransportistaClick(transportista: any) {
+    console.log("GEO DEBUG: Seleccinado:", transportista.nombre, "Rutas:", transportista.topRutas)
     setSelectedTransportista(transportista)
     const { loadCargasDisponibles, loadRecomendacionesCargas } = await import("@/app/actions/geo-actions")
     const cargasDisp = await loadCargasDisponibles()
@@ -156,93 +136,111 @@ export function GeoContent() {
       
       const newLines: any[] = []
 
+      // Helper for normalization (SAME AS BACKEND)
+      const normalizeCity = (city: string) => {
+          if (!city) return null
+          const cleanCity = city.normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase().trim()
+          const cityKeys = Object.keys(CIUDADES_LATAM);
+          const match = cityKeys.find(k => {
+              const cleanKey = k.normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase()
+              return cleanKey === cleanCity || cleanKey.includes(cleanCity) || cleanCity.includes(cleanKey)
+          })
+          return match ? CIUDADES_LATAM[match] : null
+      }
+
       // 1. Draw Routes (Dotted Lines Animated - Professional Style)
-      transportista.topRutas.forEach((rutaObj: any, idx: number) => {
-          const [origen, destino] = rutaObj.ruta.split(' → ')
-          const c1 = CIUDADES_LATAM[origen]
-          const c2 = CIUDADES_LATAM[destino]
+      // Check if routes exist
+      if (transportista.topRutas && transportista.topRutas.length > 0) {
+          transportista.topRutas.forEach((rutaObj: any, idx: number) => {
+              const [origenStr, destinoStr] = rutaObj.ruta.split(' → ')
+              const c1 = normalizeCity(origenStr)
+              const c2 = normalizeCity(destinoStr)
 
-          if (c1 && c2 && idx === 0) { // Main Route Highlighting
-             // Origin Marker (Green Pulse)
-             const originIcon = L.divIcon({
-                 className: 'custom-origin',
-                 html: `<div style="display:flex; flex-direction:column; align-items:center;">
-                          <div style="background:#10B981; width:12px; height:12px; border-radius:50%; box-shadow:0 0 0 4px rgba(16,185,129,0.3);"></div>
-                          <div style="background:#064e3b; color:#34d399; font-size:10px; padding:2px 6px; border-radius:4px; margin-top:4px; font-weight:bold;">ORIGEN</div>
-                        </div>`,
-                 iconSize: [40, 40],
-                 iconAnchor: [20, 8]
-             })
-             const m1 = L.marker(c1, { icon: originIcon }).addTo(map)
-             newLines.push(m1)
+              if (c1 && c2 && idx === 0) { // Main Route
+                 // Origin Marker
+                 const originIcon = L.divIcon({
+                     className: 'custom-origin',
+                     html: `<div style="display:flex; flex-direction:column; align-items:center;">
+                              <div style="background:#10B981; width:12px; height:12px; border-radius:50%; box-shadow:0 0 0 4px rgba(16,185,129,0.3);"></div>
+                              <div style="background:#064e3b; color:#34d399; font-size:10px; padding:2px 6px; border-radius:4px; margin-top:4px; font-weight:bold;">ORIGEN</div>
+                            </div>`,
+                     iconSize: [40, 40],
+                     iconAnchor: [20, 8]
+                 })
+                 const m1 = L.marker(c1, { icon: originIcon }).addTo(map)
+                 newLines.push(m1)
 
-             // Destination Marker (Red Pulse)
-             const destIcon = L.divIcon({
-                 className: 'custom-dest',
-                 html: `<div style="display:flex; flex-direction:column; align-items:center;">
-                          <div style="background:#EF4444; width:12px; height:12px; border-radius:50%; box-shadow:0 0 0 4px rgba(239,68,68,0.3);"></div>
-                          <div style="background:#450a0a; color:#f87171; font-size:10px; padding:2px 6px; border-radius:4px; margin-top:4px; font-weight:bold;">DESTINO</div>
-                        </div>`,
-                 iconSize: [40, 40],
-                 iconAnchor: [20, 8]
-             })
-             const m2 = L.marker(c2, { icon: destIcon }).addTo(map)
-             newLines.push(m2)
+                 // Destination Marker
+                 const destIcon = L.divIcon({
+                     className: 'custom-dest',
+                     html: `<div style="display:flex; flex-direction:column; align-items:center;">
+                              <div style="background:#EF4444; width:12px; height:12px; border-radius:50%; box-shadow:0 0 0 4px rgba(239,68,68,0.3);"></div>
+                              <div style="background:#450a0a; color:#f87171; font-size:10px; padding:2px 6px; border-radius:4px; margin-top:4px; font-weight:bold;">DESTINO</div>
+                            </div>`,
+                     iconSize: [40, 40],
+                     iconAnchor: [20, 8]
+                 })
+                 const m2 = L.marker(c2, { icon: destIcon }).addTo(map)
+                 newLines.push(m2)
 
-             // Route Line (Amber Dashed Animated)
-             const line = L.polyline([c1, c2], {
-                 color: '#F59E0B',
-                 weight: 4,
-                 dashArray: '10, 15',
-                 opacity: 0.9,
-                 lineCap: 'round'
-             }).addTo(map)
-             newLines.push(line)
+                 // Route Line
+                 const line = L.polyline([c1, c2], {
+                     color: '#F59E0B',
+                     weight: 4,
+                     dashArray: '10, 15',
+                     opacity: 0.9,
+                     lineCap: 'round'
+                 }).addTo(map)
+                 newLines.push(line)
 
-             // Animation
-             let offset = 0
-             const interval = setInterval(() => {
-                 offset = (offset - 1) % 25
-                 line.setStyle({ dashOffset: offset.toString() })
-             }, 50)
-             ;(line as any)._intervalId = interval
+                 // Animation
+                 let offset = 0
+                 const interval = setInterval(() => {
+                     offset = (offset - 1) % 25
+                     line.setStyle({ dashOffset: offset.toString() })
+                 }, 50)
+                 ;(line as any)._intervalId = interval
 
-             // Midpoint Truck Icon
-             const midPoint: [number, number] = [
-                (c1[0] + c2[0]) / 2,
-                (c1[1] + c2[1]) / 2
-             ]
-             
-             const truckIcon = L.divIcon({
-                 className: 'custom-truck',
-                 html: `<div style="background:#F59E0B; width:32px; height:32px; border-radius:50%; display:flex; align-items:center; justify-content:center; box-shadow:0 4px 12px rgba(245,158,11,0.5); border:2px solid white;">
-                    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="2">
-                        <rect x="1" y="3" width="15" height="13"></rect>
-                        <polygon points="16 8 20 8 23 11 23 16 16 16 16 8"></polygon>
-                        <circle cx="5.5" cy="18.5" r="2.5"></circle>
-                        <circle cx="18.5" cy="18.5" r="2.5"></circle>
-                    </svg>
-                 </div>`,
-                 iconSize: [32, 32],
-                 iconAnchor: [16, 16]
-             })
-             const truckMarker = L.marker(midPoint, { icon: truckIcon, zIndexOffset: 1000 }).addTo(map)
-             newLines.push(truckMarker)
+                 // Midpoint Truck Icon
+                 const midPoint: [number, number] = [
+                    (c1[0] + c2[0]) / 2,
+                    (c1[1] + c2[1]) / 2
+                 ]
+                 
+                 const truckIcon = L.divIcon({
+                     className: 'custom-truck',
+                     html: `<div style="background:#F59E0B; width:32px; height:32px; border-radius:50%; display:flex; align-items:center; justify-content:center; box-shadow:0 4px 12px rgba(245,158,11,0.5); border:2px solid white;">
+                        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="2">
+                            <rect x="1" y="3" width="15" height="13"></rect>
+                            <polygon points="16 8 20 8 23 11 23 16 16 16 16 8"></polygon>
+                            <circle cx="5.5" cy="18.5" r="2.5"></circle>
+                            <circle cx="18.5" cy="18.5" r="2.5"></circle>
+                        </svg>
+                     </div>`,
+                     iconSize: [32, 32],
+                     iconAnchor: [16, 16]
+                 })
+                 const truckMarker = L.marker(midPoint, { icon: truckIcon, zIndexOffset: 1000 }).addTo(map)
+                 newLines.push(truckMarker)
 
-             // Smart Zoom
-             map.fitBounds(L.latLngBounds([c1, c2]), { padding: [100, 100], maxZoom: 8 })
+                 // Smart Zoom
+                 map.fitBounds(L.latLngBounds([c1, c2]), { padding: [100, 100], maxZoom: 8 })
 
-          } else if (c1 && c2) {
-             // Secondary Routes (Ghost lines)
-             const line = L.polyline([c1, c2], {
-                 color: '#3b82f6',
-                 weight: 1,
-                 dashArray: '4, 8',
-                 opacity: 0.3
-             }).addTo(map)
-             newLines.push(line)
-          }
-      })
+              } else if (c1 && c2) {
+                 // Secondary Routes
+                 const line = L.polyline([c1, c2], {
+                     color: '#3b82f6',
+                     weight: 1,
+                     dashArray: '4, 8',
+                     opacity: 0.3
+                 }).addTo(map)
+                 newLines.push(line)
+              }
+          })
+      } else {
+          console.log("GEO DEBUG: No rutas found for", transportista.nombre)
+      }
+      setRouteLines(newLines)
       setRouteLines(newLines)
 
       // 2. Draw Radius Circle (Contextual)
