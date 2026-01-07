@@ -89,8 +89,8 @@ BEGIN
     curr_date := start_date;
     
     WHILE curr_date <= CURRENT_DATE LOOP
-        daily_msgs := 20 + floor(random() * 40);
-        daily_sessions := 5 + floor(random() * 10);
+        daily_msgs := 10 + floor(random() * 20); -- Reducido de 20-60 a 10-30
+        daily_sessions := 2 + floor(random() * 4); -- Reducido significativamente a 2-6 por día (antes 5-15)
         daily_reserves := floor(daily_sessions * 0.3); 
         daily_value := daily_reserves * (500000 + floor(random() * 1500000));
         
@@ -173,4 +173,30 @@ BEGIN
         
         curr_date := curr_date + 1;
     END LOOP;
+
+    -- 5. GENERACIÓN GARANTIZADA POR TRANSPORTISTA (Para Mapa Rich Data - Mínimo 5 viajes c/u)
+    -- Iteramos sobre cada transportista activo para asegurarnos que tenga historial para el mapa
+    FOR rnd_driver IN SELECT telefono FROM public.b41_transportistas WHERE estado = 'ACTIVO' LOOP
+        -- Generar entre 5 y 10 viajes adicionales para este chofer específico
+        FOR i IN 1..(5 + floor(random() * 5)) LOOP
+            -- Random date in last 90 days
+            ts := NOW() - (floor(random() * 90) || ' days')::interval;
+            session_uuid := 'sess_hist_' || rnd_driver || '_' || i;
+            
+            -- Random Route
+            selected_route := routes[1 + floor(random() * array_length(routes, 1))];
+
+            INSERT INTO public.b41_sesiones (session_id, telefono, inicio, created_at) 
+            VALUES (session_uuid, rnd_driver, ts, ts) ON CONFLICT DO NOTHING;
+
+            -- Interacción y Reserva Exitosa (para que sume al mapa)
+            INSERT INTO public.b41_interacciones (
+                session_id, telefono, mensaje_usuario, respuesta_ia, intencion, accion, 
+                tiempo_respuesta_ms, tokens_usados, origen, destino, created_at, es_exito
+            ) VALUES 
+            (session_uuid, rnd_driver, 'Historial garantizado', 'Viaje completado: ' || selected_route[1] || ' -> ' || selected_route[2], 'reservar', 'RESERVAR', 
+             22000, 150, selected_route[1], selected_route[2], ts, true);
+        END LOOP;
+    END LOOP;
+
 END $$;

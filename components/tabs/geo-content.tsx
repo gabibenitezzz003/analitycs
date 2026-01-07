@@ -17,6 +17,8 @@ const CIUDADES_LATAM: Record<string, [number, number]> = {
   "San Juan": [-31.5375, -68.5364],
   "Neuquén": [-38.9516, -68.0591],
   "Bahía Blanca": [-38.7196, -62.2724],
+  "Formosa": [-26.1775, -58.1781],
+  "San Luis": [-33.2950, -66.3356],
   
   // Internacionales
   "Montevideo": [-34.9011, -56.1645], // Uruguay
