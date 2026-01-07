@@ -622,32 +622,38 @@ export async function getTransportistasGeoData() {
     // Para cada transportista, obtener sus rutas históricas
     const transportistasConAnalisis = await Promise.all(
       transportistas.map(async (t) => {
-        // Obtenemos interacciones
+        // Obtenemos historial de viajes (Limitamos a 100 para tener buena muestra)
         const { data: interacciones } = await supabase
           .from('b41_interacciones')
           .select('origen, destino, es_exito, created_at')
           .eq('telefono', t.telefono)
           .order('created_at', { ascending: false })
-          .limit(20)
+          .limit(100)
 
         const safeInteracciones = interacciones || []
         
-        // Si no hay interacciones, usamos datos default para que APAREZCA en el mapa
-        const hasData = safeInteracciones.length > 0
+        // FILTRO: Solo mostrar choferes con al menos 5 viajes
+        if (safeInteracciones.length < 5) return null
 
-        // Frecuencia
+        // Frecuencia Normalizada
         const ubicacionesFrecuencia: Record<string, number> = {}
+        const normalizeCity = (city: string) => {
+            if (!city) return null
+            const match = Object.keys(CIUDADES_LATAM).find(k => k.toLowerCase() === city.toLowerCase() || k.toLowerCase().includes(city.toLowerCase()))
+            return match || city // Retorna el match del diccionario o la ciudad original si no encuentra
+        }
+
         safeInteracciones.forEach(i => {
-           if (i.origen) ubicacionesFrecuencia[i.origen] = (ubicacionesFrecuencia[i.origen] || 0) + 1
-           if (i.destino) ubicacionesFrecuencia[i.destino] = (ubicacionesFrecuencia[i.destino] || 0) + 1
+           const origenNorm = normalizeCity(i.origen)
+           const destinoNorm = normalizeCity(i.destino)
+           if (origenNorm) ubicacionesFrecuencia[origenNorm] = (ubicacionesFrecuencia[origenNorm] || 0) + 1
+           if (destinoNorm) ubicacionesFrecuencia[destinoNorm] = (ubicacionesFrecuencia[destinoNorm] || 0) + 1
         })
 
         // Calcular centroide (promedio ponderado)
         let sumLat = 0, sumLng = 0, sumPesos = 0
         Object.entries(ubicacionesFrecuencia).forEach(([ciudad, freq]) => {
-           // Normalizamos key para evitar mismatch mayusculas/tildes leves si hubiera
-           const key = Object.keys(CIUDADES_LATAM).find(k => k.toLowerCase() === ciudad.toLowerCase()) || ciudad
-           const coords = CIUDADES_LATAM[key]
+           const coords = CIUDADES_LATAM[ciudad]
            if (coords) {
              sumLat += coords[0] * freq
              sumLng += coords[1] * freq
@@ -655,45 +661,56 @@ export async function getTransportistasGeoData() {
            }
         })
 
-        // Si no hay centroide calculado (sin datos o ciudades no encontradas), default a Buenos Aires
         const centroide = sumPesos > 0 ? {
           lat: sumLat / sumPesos,
           lng: sumLng / sumPesos
-        } : { lat: -34.6037, lng: -58.3816 } // Default BA
+        } : { lat: -34.6037, lng: -58.3816 }
 
-        // Radio
+        // Radio Maximo
         let radioMax = 0
-        if (sumPesos > 0) {
-            Object.keys(ubicacionesFrecuencia).forEach(ciudad => {
-                const key = Object.keys(CIUDADES_LATAM).find(k => k.toLowerCase() === ciudad.toLowerCase()) || ciudad
-                const coords = CIUDADES_LATAM[key]
-                if (coords) {
-                    const dist = distanciaHaversine(centroide.lat, centroide.lng, coords[0], coords[1])
-                    if (dist > radioMax) radioMax = dist
-                }
-            })
-        }
+        Object.keys(ubicacionesFrecuencia).forEach(ciudad => {
+            const coords = CIUDADES_LATAM[ciudad]
+            if (coords && centroide) {
+                const dist = distanciaHaversine(centroide.lat, centroide.lng, coords[0], coords[1])
+                if (dist > radioMax) radioMax = dist
+            }
+        })
 
-        // Stats basicos
+        // Stats
         const exitosos = safeInteracciones.filter(i => i.es_exito).length
-        const tasaExito = hasData ? (exitosos / safeInteracciones.length) * 100 : 100
-        const topRutas = hasData ? Object.entries(ubicacionesFrecuencia).slice(0,3).map(([r,v]) => ({ ruta: r, frecuencia: v })) : []
+        const tasaExito = (exitosos / safeInteracciones.length) * 100
+        
+        // Top Rutas (Normalizadas)
+        const rutasFrecuencia: Record<string, number> = {}
+        safeInteracciones.forEach(i => {
+            const o = normalizeCity(i.origen)
+            const d = normalizeCity(i.destino)
+            if (o && d && CIUDADES_LATAM[o] && CIUDADES_LATAM[d]) {
+                const ruta = `${o} → ${d}`
+                rutasFrecuencia[ruta] = (rutasFrecuencia[ruta] || 0) + 1
+            }
+        })
+
+        const topRutas = Object.entries(rutasFrecuencia)
+            .map(([ruta, freq]) => ({ ruta, frecuencia: freq }))
+            .sort((a, b) => b.frecuencia - a.frecuencia)
+            .slice(0, 3)
 
         return {
           ...t,
           centroide,
-          radioAccion: Math.round(radioMax) || 50, // Minimo 50km
+          radioAccion: Math.round(radioMax) || 100, // Minimo 100km visibles
           totalViajes: safeInteracciones.length,
           viajesExitosos: exitosos,
           tasaExito: Math.round(tasaExito),
-          especializacion: 50, // Default mid
+          especializacion: 60,
           topRutas,
           ubicacionesFrecuentes: []
         }
       })
     )
 
-    return transportistasConAnalisis
+    return transportistasConAnalisis.filter(t => t !== null)
   } catch (error) {
     console.error("Error in getTransportistasGeoData:", error)
     return []
