@@ -322,3 +322,22 @@ body {
     display: none !important;
   }
 }
+
+/* Map Visualization Styles */
+.custom-arrow svg {
+    transform: rotate(var(--arrow-rotate, 0deg));
+}
+
+.custom-marker,
+.custom-origin,
+.custom-dest,
+.custom-truck, 
+.custom-arrow {
+    background: transparent !important;
+    border: none !important;
+}
+
+.leaflet-div-icon {
+    background: transparent !important;
+    border: none !important;
+}
