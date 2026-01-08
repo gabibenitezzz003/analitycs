@@ -1,0 +1,51 @@
+
+> my-v0-project@0.1.0 build
+> next build
+
+   ▲ Next.js 16.0.10 (Turbopack)
+   - Environments: .env.local
+
+ ⚠ The "middleware" file convention is deprecated. Please use "proxy" instead. Learn more: https://nextjs.org/docs/messages/middleware-to-proxy
+   Creating an optimized production build ...
+
+> Build error occurred
+Error: Turbopack build failed with 1 errors:
+./lib/supabase/server.ts:2:1
+Ecmascript file had an error
+  1 | import { createServerClient } from "@supabase/ssr"
+> 2 | import { cookies } from "next/headers"
+    | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  3 |
+  4 | export async function createClient() {
+  5 |   const cookieStore = await cookies()
+
+You're importing a component that needs "next/headers". That only works in a Server Component which is not supported in the pages/ directory. Read more: https://nextjs.org/docs/app/building-your-application/rendering/server-components
+
+
+
+Import traces:
+  App Route:
+    ./lib/supabase/server.ts
+    ./app/api/health/route.ts
+
+  Server Component:
+    ./lib/supabase/server.ts
+    ./app/login/actions.ts
+    ./app/login/page.tsx
+
+  Client Component Browser:
+    ./lib/supabase/server.ts [Client Component Browser]
+    ./lib/queries.ts [Client Component Browser]
+    ./components/tabs/geo-content.tsx [Client Component Browser]
+    ./components/tabs/geo-content.tsx [Server Component]
+    ./app/page.tsx [Server Component]
+
+  Client Component SSR:
+    ./lib/supabase/server.ts [Client Component SSR]
+    ./lib/queries.ts [Client Component SSR]
+    ./components/tabs/geo-content.tsx [Client Component SSR]
+    ./components/tabs/geo-content.tsx [Server Component]
+    ./app/page.tsx [Server Component]
+
+
+    at <unknown> (./lib/supabase/server.ts:2:1)

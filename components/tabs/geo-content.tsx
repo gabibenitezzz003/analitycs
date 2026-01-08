@@ -4,7 +4,7 @@ import { useEffect, useRef, useState } from "react"
 import { TransportistaDetailPanel } from "@/components/TransportistaDetailPanel"
 import { cn } from "@/lib/utils"
 // Import centralized dictionary to ensure consistency
-import { CIUDADES_LATAM } from "@/lib/queries"
+import { CIUDADES_LATAM } from "@/lib/geo-utils"
 
 declare global {
   interface Window {

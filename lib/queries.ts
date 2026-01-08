@@ -563,46 +563,7 @@ export async function getAdvancedIAMetrics(range: string = "7d") {
 // ANÁLISIS GEOGRÁFICO DE TRANSPORTISTAS (LATAM)
 // ============================================================================
 
-// Coordenadas de ciudades LATAM
-// Coordenadas de ciudades LATAM
-export const CIUDADES_LATAM: Record<string, [number, number]> = {
-  // Argentina
-  "Buenos Aires": [-34.6037, -58.3816],
-  "Córdoba": [-31.4201, -64.1888],
-  "Rosario": [-32.9468, -60.6393],
-  "Mendoza": [-32.8908, -68.8272],
-  "Tucumán": [-26.8083, -65.2176],
-  "Mar del Plata": [-38.0055, -57.5426],
-  "Salta": [-24.7821, -65.4232],
-  "San Juan": [-31.5375, -68.5364],
-  "Neuquén": [-38.9516, -68.0591],
-  "Bahía Blanca": [-38.7196, -62.2724],
-  "Formosa": [-26.1775, -58.1781],
-  "San Luis": [-33.2950, -66.3356],
-  
-  // Internacionales (Cruces Fronterizos / Destinos)
-  "Montevideo": [-34.9011, -56.1645], // Uruguay
-  "Santiago": [-33.4489, -70.6693],   // Chile
-  "São Paulo": [-23.5505, -46.6333],  // Brasil
-  "Rio de Janeiro": [-22.9068, -43.1729], // Brasil
-  "Asunción": [-25.2637, -57.5759],   // Paraguay
-  "La Paz": [-16.5000, -68.1500],     // Bolivia
-  "Lima": [-12.0464, -77.0428],       // Perú
-  "Bogotá": [4.7110, -74.0721],       // Colombia
-}
-
-// Calcular distancia entre dos puntos (fórmula de Haversine)
-function distanciaHaversine(lat1: number, lon1: number, lat2: number, lon2: number): number {
-  const R = 6371 // Radio de la Tierra en km
-  const dLat = (lat2 - lat1) * Math.PI / 180
-  const dLon = (lon2 - lon1) * Math.PI / 180
-  const a = 
-    Math.sin(dLat/2) * Math.sin(dLat/2) +
-    Math.cos(lat1 * Math.PI / 180) * Math.cos(lat2 * Math.PI / 180) *
-    Math.sin(dLon/2) * Math.sin(dLon/2)
-  const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1-a))
-  return R * c
-}
+export import { CIUDADES_LATAM, distanciaHaversine } from "./geo-utils"
 
 // Obtener datos geográficos de transportistas con análisis de zonas
 export async function getTransportistasGeoData() {
