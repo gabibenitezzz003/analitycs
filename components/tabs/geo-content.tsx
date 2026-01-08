@@ -58,7 +58,7 @@ export function GeoContent() {
     function initMap() {
       if (!mapRef.current || mapInstanceRef.current) return
       const L = window.L
-      const map = L.map(mapRef.current, { zoomControl: false }).setView([-34.6037, -58.3816], 5)
+      const map = L.map(mapRef.current, { zoomControl: true }).setView([-34.6037, -58.3816], 5)
       mapInstanceRef.current = map
 
       // Dark style
@@ -88,6 +88,9 @@ export function GeoContent() {
     }
   }, [])
 
+  // State for Panel Visibility
+  const [isPanelOpen, setIsPanelOpen] = useState(false)
+
   // Update Markers
   useEffect(() => {
     if (!mapInstanceRef.current || !window.L || transportistas.length === 0) return
@@ -111,6 +114,10 @@ export function GeoContent() {
       }).addTo(map)
 
       marker.on('click', () => handleTransportistaClick(t))
+      marker.on('dblclick', () => {
+          handleTransportistaClick(t)
+          setIsPanelOpen(true)
+      })
     })
   }, [transportistas, selectedTransportista])
 
@@ -288,17 +295,21 @@ export function GeoContent() {
                  <div 
                     key={t.telefono}
                     onClick={() => handleTransportistaClick(t)}
+                    onDoubleClick={() => {
+                        handleTransportistaClick(t)
+                        setIsPanelOpen(true)
+                    }}
                     className={cn(
                         "p-3 border-b border-zinc-800/50 cursor-pointer hover:bg-zinc-900 transition-colors flex items-center gap-3",
                         selectedTransportista?.telefono === t.telefono ? "bg-blue-900/10 border-l-2 border-l-blue-500" : ""
                     )}
                  >
                     <div className="w-8 h-8 rounded-full bg-zinc-800 flex items-center justify-center text-xs font-bold text-zinc-400">
-                        {t.nombre[0]}{t.apellido[0]}
+                        {(t.nombre || "?")[0]}{(t.apellido || "?")[0]}
                     </div>
                     <div>
                         <p className={cn("text-xs font-medium", selectedTransportista?.telefono === t.telefono ? "text-blue-400" : "text-zinc-300")}>
-                            {t.nombre} {t.apellido}
+                            {t.nombre || "Chofer"} {t.apellido || ""}
                         </p>
                         <p className="text-[10px] text-zinc-500">{t.totalViajes} viajes • {t.tasaExito}% éxito</p>
                     </div>
@@ -318,16 +329,14 @@ export function GeoContent() {
          <div ref={mapRef} className="flex-1 rounded-lg w-full h-full" style={{ background: "#111" }} />
          
          {/* Detail Overlay */}
-         {selectedTransportista && (
+         {selectedTransportista && isPanelOpen && (
             <div className="absolute top-6 right-6 z-[400] w-80">
                 <TransportistaDetailPanel 
                     transportista={selectedTransportista}
                     cargas={cargasRecomendadas}
                     onClose={() => {
-                        setSelectedTransportista(null)
-                        if (radioCircle && mapInstanceRef.current) mapInstanceRef.current.removeLayer(radioCircle)
-                        if (routeLines.length && mapInstanceRef.current) routeLines.forEach(l => mapInstanceRef.current?.removeLayer(l))
-                        if (mapInstanceRef.current) mapInstanceRef.current.flyTo([-34.6037, -58.3816], 5)
+                        setIsPanelOpen(false) 
+                        // DO NOT CLEAR selectedTransportista to keep lines on map
                     }}
                 />
             </div>

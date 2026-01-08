@@ -51,7 +51,7 @@ export default async function DashboardPage({
             <TransportistasContent range={range} />
           </Suspense>
         }
-        geoContent={<GeoContent stats={geoStats} />}
+        geoContent={<GeoContent />}
       />
     </Suspense>
   )

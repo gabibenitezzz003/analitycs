@@ -2,7 +2,7 @@ import { getMetricas, getAnalisisSentimiento, getIAMetrics, getAdvancedIAMetrics
 
 export async function IAContent({ range = "7d" }: { range?: string }) {
   // Manejo robusto de errores para evitar crashes en producción
-  let metricas, sentimiento, iaMetrics, advancedAI, fallbacks
+  let metricas: any, sentimiento: any, iaMetrics: any, advancedAI: any, fallbacks: any[]
   
   try {
     [metricas, sentimiento, iaMetrics, advancedAI, fallbacks] = await Promise.all([
