@@ -11,7 +11,7 @@ async function check() {
   const { count } = await supabase.from("b41_interacciones").select("*", { count: "exact", head: true })
   console.log("COUNT_RAW:", count)
   
-  if (count > 0) {
+  if (count && count > 0) {
     const { data } = await supabase.from("b41_interacciones").select("created_at").order("created_at", { ascending: false }).limit(1)
     if (data && data[0]) {
       const date = new Date(data[0].created_at)

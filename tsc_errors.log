@@ -1,0 +1,2 @@
+components/animated-counter.tsx(24,24): error TS2554: Expected 1 arguments, but got 0.
+scripts/quick-check.ts(14,7): error TS18047: 'count' is possibly 'null'.
