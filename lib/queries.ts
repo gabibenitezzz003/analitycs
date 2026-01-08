@@ -563,7 +563,8 @@ export async function getAdvancedIAMetrics(range: string = "7d") {
 // ANÁLISIS GEOGRÁFICO DE TRANSPORTISTAS (LATAM)
 // ============================================================================
 
-export import { CIUDADES_LATAM, distanciaHaversine } from "./geo-utils"
+import { CIUDADES_LATAM, distanciaHaversine } from "./geo-utils"
+export { CIUDADES_LATAM, distanciaHaversine }
 
 // Obtener datos geográficos de transportistas con análisis de zonas
 export async function getTransportistasGeoData() {
